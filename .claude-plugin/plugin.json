@@ -1,0 +1,7 @@
+{
+  "name": "doki-theme-picker",
+  "version": "0.1.0",
+  "description": "/doki-theme-picker: browse all 88 Doki themes (dark and light) in a pane with a live preview, Enter applies one to Claude Code, Windows Terminal and the shared accent file.",
+  "author": { "name": "Shelvi" },
+  "types": "./types/index.d.ts"
+}
