@@ -5,7 +5,7 @@ import { THEMES as DOKI_THEMES } from './themes'
 
 export const WT_PROFILE_GUID = '{61c54bbd-c2c6-5271-96e7-009a87ff44bf}'
 
-// Doki "Ram": the look the user has now, and the fallback when the accent file is missing.
+// Doki "Ram": the default theme, and the fallback when the accent file is missing.
 export const RAM_ACCENT: Accent = {
   name: 'Ram',
   dark: true,
@@ -259,16 +259,25 @@ export function matchStyle(original: string, text: string): string {
   return /\r?\n$/.test(original) ? body + eol : body
 }
 
-/** Adds or replaces `scheme` (by name) and points the profile at it. Returns the new file text. */
-export function updateWtSettings(text: string, scheme: WtScheme, guid: string = WT_PROFILE_GUID): string {
+/**
+ * Adds or replaces `scheme` (by name) and points one profile at it. Returns the new file text.
+ * The profile: `current` (Windows Terminal's WT_PROFILE_ID, the tab Claude Code runs in), else the
+ * default profile (a guid or a name), else Windows PowerShell.
+ */
+export function updateWtSettings(text: string, scheme: WtScheme, current?: string | null): string {
   const settings = JSON.parse(text) as {
+    defaultProfile?: unknown
     schemes?: WtScheme[]
     profiles?: { list?: Array<Record<string, unknown>> }
   }
+  const list = settings.profiles?.list ?? []
+  const same = (a: unknown, b: unknown) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase()
+  const profile = [current, settings.defaultProfile, WT_PROFILE_GUID]
+    .map(want => list.find(p => same(p.guid, want) || same(p.name, want)))
+    .find(p => p !== undefined)
+  if (!profile) throw new Error('Windows Terminal profile not found')
   const schemes = (settings.schemes ?? []).filter(s => s.name !== scheme.name)
   settings.schemes = [...schemes, scheme]
-  const profile = settings.profiles?.list?.find(p => p.guid === guid)
-  if (!profile) throw new Error(`Windows Terminal profile ${guid} not found`)
   profile.colorScheme = scheme.name
   return matchStyle(text, JSON.stringify(settings, null, 4))
 }

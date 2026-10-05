@@ -33,8 +33,10 @@ class Files extends Map<string, string> {
 }
 
 /** A file system in memory and a log of everything the plugin asked the outside world for. */
-function world(on: On) {
+function world(on: On, env: Record<string, string> = {}) {
   const files = new Files([
+    // Another local mod, so ~/.claude/mods exists and the accent file is written.
+    [`${HOME}/.claude/mods/other-mod/hooks.json`, '{}'],
     [SETTINGS, JSON.stringify({ env: { A: '1' }, theme: 'custom:doki-ram' }, null, 2)],
     [
       WT,
@@ -45,8 +47,9 @@ function world(on: On) {
     ],
   ])
   const log = { toasts: [] as string[], config: [] as unknown[], opened: [] as unknown[], closed: [] as string[], focused: [] as string[] }
-  mock.env(on, { USERPROFILE: HOME, LOCALAPPDATA: 'C:/local' })
-  on('fs.exists', async (_$, e) => ({ value: files.has(e.path) }))
+  mock.env(on, { USERPROFILE: HOME, LOCALAPPDATA: 'C:/local', ...env })
+  // A path exists when it is a file, or a folder that holds one.
+  on('fs.exists', async (_$, e) => ({ value: files.has(e.path) || [...files.keys()].some(k => k.startsWith(`${norm(e.path)}\\`)) }))
   on('fs.read', async (_$, e) => {
     const text = files.get(e.path)
     if (text === undefined) throw new Error(`ENOENT ${e.path}`)
@@ -154,6 +157,33 @@ test('the picker pane validates on terminal, previews the ring, and Enter applie
   await jump($ as never, indexOf('ram') - indexOf('vanilla'))
   expect((await buttons(ui as never)).find(b => String(b.props.label) === '   Ram')).toBeDefined()
   await ui.unmount()
+})
+
+test('a fresh home: the tab Windows Terminal profile gets the scheme, and no mods folder is made', async ($, on) => {
+  const { files } = world(on, { WT_PROFILE_ID: '{574E775E-4F2A-5B96-AC1E-A2962A402336}' })
+  files.delete(norm(`${HOME}/.claude/mods/other-mod/hooks.json`))
+  files.delete(norm(SETTINGS))
+  files.set(
+    WT,
+    JSON.stringify({
+      defaultProfile: '{61c54bbd-c2c6-5271-96e7-009a87ff44bf}',
+      profiles: {
+        list: [
+          { guid: '{61c54bbd-c2c6-5271-96e7-009a87ff44bf}', name: 'Windows PowerShell' },
+          { guid: '{574e775e-4f2a-5b96-ac1e-a2962a402336}', name: 'PowerShell' },
+        ],
+      },
+    }),
+  )
+  await $.session.start(START)
+  const done = await $.command.run({ ...RUN, args: 'vanilla' })
+  expect(done.text).toContain('Windows Terminal scheme')
+  const wt = JSON.parse(files.get(WT)!)
+  expect(wt.profiles.list[0].colorScheme).toBeUndefined()
+  expect(wt.profiles.list[1].colorScheme).toBe('Doki Vanilla')
+  expect([...files.keys()].some(k => k.includes(norm('/.claude/mods/')))).toBe(false)
+  // No settings.json before: one is made that holds only the theme.
+  expect(JSON.parse(files.get(SETTINGS)!)).toEqual({ theme: 'custom:doki-vanilla' })
 })
 
 test('the window slides: focusing the last drawn theme draws the next one', async ($, on) => {

@@ -35,7 +35,7 @@ export type TermcnColors = Record<
 
 export type TermcnRaw = { name: string; slug: string; colors: TermcnColors }
 
-/** The shared accent file (~/.claude/mods/theme-accent.json), read by jev-copilot. */
+/** The shared accent file (~/.claude/mods/theme-accent.json) that other mods can read. */
 export type Accent = {
   name: string
   dark: boolean
