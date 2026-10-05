@@ -186,6 +186,22 @@ test('settings updates change only what they should', async () => {
   expect(next.profiles.list[0].colorScheme).toBe('Doki Vanilla')
   expect(() => updateWtSettings(JSON.stringify({ profiles: { list: [] } }), toWtScheme(ram))).toThrow('not found')
 
+  // The profile: the tab's WT_PROFILE_ID first, then defaultProfile (a guid or a name), then Windows PowerShell.
+  const three = JSON.stringify({
+    defaultProfile: 'Command Prompt',
+    profiles: {
+      list: [
+        { guid: '{61c54bbd-c2c6-5271-96e7-009a87ff44bf}', name: 'Windows PowerShell' },
+        { guid: '{0caa0dad-35be-5f56-a8ff-afceeeaa6101}', name: 'Command Prompt' },
+        { guid: '{574e775e-4f2a-5b96-ac1e-a2962a402336}', name: 'PowerShell' },
+      ],
+    },
+  })
+  const schemeOf = (text: string) => (JSON.parse(text) as { profiles: { list: Array<{ colorScheme?: string }> } }).profiles.list.map(p => p.colorScheme)
+  expect(schemeOf(updateWtSettings(three, toWtScheme(ram), '{574E775E-4F2A-5B96-AC1E-A2962A402336}'))).toEqual([undefined, undefined, 'Doki Ram'])
+  expect(schemeOf(updateWtSettings(three, toWtScheme(ram), '{not-in-the-list}'))).toEqual([undefined, 'Doki Ram', undefined])
+  expect(schemeOf(updateWtSettings(three.replace('Command Prompt"', 'Gone"'), toWtScheme(ram)))).toEqual(['Doki Ram', undefined, undefined])
+
   const settings = JSON.parse(updateClaudeSettings('{"env":{"A":"1"},"theme":"custom:doki-ram"}', 'custom:doki-vanilla'))
   expect(settings).toEqual({ env: { A: '1' }, theme: 'custom:doki-vanilla' })
 })

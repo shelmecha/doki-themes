@@ -21,7 +21,12 @@ import {
 const PANE = 'doki-theme-picker'
 const COMMAND = 'doki-theme-picker'
 const PREVIEW_ROWS = 11 // title, 2 swatch rows, 5 mock-terminal rows (with padding), hint, 2 spacers
-const WT_SETTINGS = 'Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json'
+// Windows Terminal settings under %LOCALAPPDATA%: the Store build, the Preview build, the unpackaged build.
+const WT_SETTINGS = [
+  'Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json',
+  'Packages/Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe/LocalState/settings.json',
+  'Microsoft/Windows Terminal/settings.json',
+]
 
 const highlight = atom({ plugin: 'doki-theme-picker', key: 'highlight' } as const, '')
 const current = atom({ plugin: 'doki-theme-picker', key: 'current' } as const, '')
@@ -138,27 +143,44 @@ async function apply($: EngineInterface, theme: DokiTheme): Promise<string[]> {
   notes.push(`theme file ${themePath}`)
 
   // 2. Switch Claude Code to it: the /config row first, then make sure settings.json agrees.
+  // The /config row takes only the built-in themes, so a refusal is expected; settings.json does the switch.
   try {
     const { deny } = await $.config.set({ key: 'theme', value: preference })
-    notes.push(deny ? `config.set refused (${deny})` : 'config.set theme')
+    if (!deny) notes.push('config.set theme')
   } catch (error) {
     notes.push(`config.set failed (${String(error).slice(0, 80)})`)
   }
   const settingsPath = `${root}/.claude/settings.json`
   const settings = await readOr($, settingsPath)
-  if (settings !== undefined && (JSON.parse(settings) as { theme?: unknown }).theme !== preference) {
-    await backup($, root, settingsPath, 'settings.json', settings)
-    await $.fs.write(settingsPath, updateClaudeSettings(settings, preference))
-    notes.push('settings.json theme')
+  try {
+    if (settings === undefined) {
+      // A fresh install can have no user settings.json yet: make one that holds only the theme.
+      await $.fs.write(settingsPath, JSON.stringify({ theme: preference }, null, 2) + '\n')
+      notes.push('settings.json theme')
+    } else if ((JSON.parse(settings) as { theme?: unknown }).theme !== preference) {
+      const next = updateClaudeSettings(settings, preference)
+      await backup($, root, settingsPath, 'settings.json', settings)
+      await $.fs.write(settingsPath, next)
+      notes.push('settings.json theme')
+    }
+  } catch (error) {
+    notes.push(`settings.json skipped (${String(error).slice(0, 80)})`)
   }
 
-  // 3. Windows Terminal: the scheme, set on the PowerShell profile.
+  // 3. Windows Terminal: the scheme, set on the profile of the tab Claude Code runs in.
   const local = ((await $.env.get('LOCALAPPDATA')) ?? '').replace(/\\/g, '/')
-  const wtPath = `${local}/${WT_SETTINGS}`
-  const wt = local ? await readOr($, wtPath) : undefined
+  let wtPath = ''
+  let wt: string | undefined
+  for (const candidate of local ? WT_SETTINGS : []) {
+    wt = await readOr($, `${local}/${candidate}`)
+    if (wt !== undefined) {
+      wtPath = `${local}/${candidate}`
+      break
+    }
+  }
   if (wt !== undefined) {
     try {
-      const next = updateWtSettings(wt, toWtScheme(theme))
+      const next = updateWtSettings(wt, toWtScheme(theme), await $.env.get('WT_PROFILE_ID'))
       await backup($, root, wtPath, 'wt-settings.json', wt)
       await $.fs.write(wtPath, next)
       notes.push('Windows Terminal scheme')
@@ -169,9 +191,16 @@ async function apply($: EngineInterface, theme: DokiTheme): Promise<string[]> {
     notes.push('Windows Terminal not found, skipped')
   }
 
-  // 4. The accent other mods (jev-copilot) draw with.
-  await $.fs.write(`${root}/.claude/mods/theme-accent.json`, JSON.stringify(toAccent(theme), null, 2) + '\n')
-  notes.push('accent file')
+  // 4. The accent other mods draw with. Written only when ~/.claude/mods already exists, so a
+  // person without local mods gets no extra folder.
+  try {
+    if (await $.fs.exists(`${root}/.claude/mods`)) {
+      await $.fs.write(`${root}/.claude/mods/theme-accent.json`, JSON.stringify(toAccent(theme), null, 2) + '\n')
+      notes.push('accent file')
+    }
+  } catch (error) {
+    notes.push(`accent file skipped (${String(error).slice(0, 80)})`)
+  }
 
   await update($, current, () => theme.slug)
   $.ui.toast(`Theme: ${sourceLabel(theme)} ${theme.name}`)
@@ -290,14 +319,14 @@ export const register: Register = on => {
         <Box key="mock" flexDirection="column" backgroundColor={c.bg} paddingX={1} marginTop={1}>
           <Box flexDirection="row">
             <Text color={c.fg} backgroundColor={c.bg}>
-              PS C:\hook-review&gt;{' '}
+              PS C:\projects&gt;{' '}
             </Text>
             <Text color={c.accent} backgroundColor={c.bg}>
               claude
             </Text>
           </Box>
           <Text color={c.accent} backgroundColor={c.bg}>
-            Jev ▸ question 92% · small · workflow off
+            ● Update(src/theme.ts)
           </Text>
           <Text color={c.red} backgroundColor={c.bg}>
             - const theme = 'old'
