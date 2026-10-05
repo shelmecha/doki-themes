@@ -1,28 +1,57 @@
 # doki-themes
 
-A Claude Code mod. `/doki-theme-picker` opens a pane with all Doki themes (dark and light) and the termcn themes, with a live preview. Enter applies the theme to Claude Code, Windows Terminal and the shared accent file (`~/.claude/mods/theme-accent.json`).
+A theme picker for Claude Code on Windows. Type `/doki-theme-picker` to open a pane with 88 Doki themes (dark and light) and the termcn themes. Use the arrow keys to see a live preview. Press Enter to apply the theme to Claude Code and Windows Terminal.
+
+## Requirements
+
+- Windows.
+- A recent version of Claude Code. The picker is a mod (a plugin with hook modules), and older versions do not load mods.
+- For the terminal colors: Windows Terminal from the Microsoft Store. If the picker does not find Windows Terminal, it changes only the Claude Code theme.
 
 ## Install
 
-Claude Code loads the mod from this folder through `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`:
+In Claude Code, type these two commands:
 
 ```
-C:/Users/Shelvi/Documents/GitHub/doki-themes
+/plugin marketplace add shelmecha/doki-themes
+/plugin install doki-theme-picker@doki-themes
 ```
 
-Restart Claude Code after you change that path.
+Restart Claude Code. Then type `/doki-theme-picker`.
 
-## Test
+## Use
+
+| Key | Action |
+|---|---|
+| Up / Down or Tab | Move through the list and see the preview |
+| Enter | Apply the theme |
+| Esc | Close the picker |
+
+## What the picker changes
+
+When you press Enter, the picker writes only these files:
+
+- `%USERPROFILE%\.claude\themes\<theme>.json`: the Claude Code theme.
+- `%USERPROFILE%\.claude\settings.json`: the `theme` value.
+- The Windows Terminal `settings.json`: a color scheme for the PowerShell profile.
+- `%USERPROFILE%\.claude\mods\theme-accent.json`: an accent color that other mods can read.
+
+Before it changes `settings.json` or the Windows Terminal settings, it copies the old file to `%USERPROFILE%\.claude\backups\`. To undo a change, copy the backup back.
+
+## Uninstall
 
 ```
-claude plugin test .
+/plugin uninstall doki-theme-picker@doki-themes
 ```
 
-## Rebuild the theme tables
+To go back to a built-in theme, use `/config`.
 
-- `node scripts/build-themes.mjs` writes `hooks/themes.ts`.
+## For developers
+
+- Test: `claude plugin test .`
+- `node scripts/build-themes.mjs <path to the Doki Theme VS Code extension>` writes `hooks/themes.ts`.
 - `node scripts/build-termcn.mjs` writes `hooks/termcn-themes.ts`.
 
-## History
+## Credits and license
 
-Until 2026-10-05 this mod was in `shelmecha/claude-setup` at `~/.claude/mods/doki-theme-picker`. Old patch scripts in `shelmecha/cli-optimization-with-claude-and-jev` (`patches/apply-29*.mjs`) use that old path.
+The theme colors come from the Doki Theme and termcn projects. See [CREDITS.md](CREDITS.md). This repo uses the MIT license. See [LICENSE](LICENSE).

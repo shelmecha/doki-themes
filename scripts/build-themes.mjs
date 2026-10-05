@@ -1,10 +1,11 @@
 // One-off: reads the 88 Doki themes from the VS Code extension and writes hooks/themes.ts,
 // so the mod never depends on VS Code at run time. Run: node scripts/build-themes.mjs [extensionDir]
 import { readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const EXT = process.argv[2] ?? 'C:/Users/Shelvi/.vscode/extensions/unthrottled.doki-theme-88.1.18'
+const EXT = process.argv[2] ?? join(homedir(), '.vscode/extensions/unthrottled.doki-theme-88.1.18')
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'hooks', 'themes.ts')
 
 // Our short color name -> the VS Code color key it comes from.

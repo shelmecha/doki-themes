@@ -1,0 +1,11 @@
+{
+  "name": "doki-themes",
+  "owner": { "name": "shelmecha", "url": "https://github.com/shelmecha" },
+  "plugins": [
+    {
+      "name": "doki-theme-picker",
+      "source": "./",
+      "description": "Pick one of 88 Doki themes or the termcn themes for Claude Code and Windows Terminal, with a live preview. Windows only."
+    }
+  ]
+}
