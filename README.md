@@ -71,6 +71,7 @@ The uninstall does not change your current theme. To go back to a built-in theme
 ## Problems
 
 - **The command is not found after the install.** Restart Claude Code. The picker registers its command when a session starts.
+- **The Claude Code theme does not change after Enter.** Restart Claude Code.
 - **The Windows Terminal colors do not change.** Make sure that Claude Code runs in Windows Terminal. The picker skips Windows Terminal if its `settings.json` has comments or trailing commas, because it cannot read that file safely.
 
 ## For developers
