@@ -30,6 +30,8 @@ const WT_SETTINGS = [
 
 const highlight = atom({ plugin: 'doki-theme-picker', key: 'highlight' } as const, '')
 const current = atom({ plugin: 'doki-theme-picker', key: 'current' } as const, '')
+// The theme whose scheme and accent were last written, for follow() when there is no accent file.
+const followed = atom({ plugin: 'doki-theme-picker', key: 'followed' } as const, '')
 
 const LIST = ordered()
 // The rows the list draws, group headers included: what the window slides over.
@@ -119,13 +121,18 @@ async function backup($: EngineInterface, root: string, path: string, name: stri
   return target
 }
 
-async function currentSlug($: EngineInterface): Promise<string> {
+/** The theme preference in the user settings.json, as `custom:doki-ram`; undefined when there is none. */
+async function currentPreference($: EngineInterface): Promise<unknown> {
   const settings = await readOr($, `${await home($)}/.claude/settings.json`)
   try {
-    return slugOfPreference((JSON.parse(settings ?? '{}') as { theme?: unknown }).theme)
+    return (JSON.parse(settings ?? '{}') as { theme?: unknown }).theme
   } catch {
-    return ''
+    return undefined
   }
+}
+
+async function currentSlug($: EngineInterface): Promise<string> {
+  return slugOfPreference(await currentPreference($))
 }
 
 /** Writes the theme everywhere it shows: Claude Code, Windows Terminal, the shared accent file. */
@@ -167,6 +174,18 @@ async function apply($: EngineInterface, theme: DokiTheme): Promise<string[]> {
     notes.push(`settings.json skipped (${String(error).slice(0, 80)})`)
   }
 
+  // 3 and 4. Windows Terminal and the accent file.
+  notes.push(...(await applyOutside($, root, theme)))
+
+  await update($, followed, () => theme.slug)
+  await update($, current, () => theme.slug)
+  $.ui.toast(`Theme: ${sourceLabel(theme)} ${theme.name}`)
+  return notes
+}
+
+/** What Claude Code's own theme setting does not reach: the Windows Terminal scheme and the accent file. */
+async function applyOutside($: EngineInterface, root: string, theme: DokiTheme): Promise<string[]> {
+  const notes: string[] = []
   // 3. Windows Terminal: the scheme, set on the profile of the tab Claude Code runs in.
   const local = ((await $.env.get('LOCALAPPDATA')) ?? '').replace(/\\/g, '/')
   let wtPath = ''
@@ -201,9 +220,28 @@ async function apply($: EngineInterface, theme: DokiTheme): Promise<string[]> {
   } catch (error) {
     notes.push(`accent file skipped (${String(error).slice(0, 80)})`)
   }
+  return notes
+}
 
+/**
+ * Claude Code's /theme picked a theme: if it is one of ours, bring the Windows Terminal
+ * scheme and the accent file along, so both commands leave the same result. Does nothing when the
+ * accent file already holds the theme.
+ */
+async function follow($: EngineInterface, preference: unknown): Promise<string[]> {
+  const theme = findTheme(slugOfPreference(preference))
+  if (!theme) return []
+  const root = await home($)
+  if (await $.fs.exists(`${root}/.claude/mods`)) {
+    const accent = await readOr($, `${root}/.claude/mods/theme-accent.json`)
+    if (accent === JSON.stringify(toAccent(theme), null, 2) + '\n') return []
+  } else if ((await read($, followed)) === theme.slug) {
+    // No accent file to compare with: the last theme this session followed stands in for it.
+    return []
+  }
+  const notes = await applyOutside($, root, theme)
+  await update($, followed, () => theme.slug)
   await update($, current, () => theme.slug)
-  $.ui.toast(`Theme: ${sourceLabel(theme)} ${theme.name}`)
   return notes
 }
 
@@ -219,6 +257,8 @@ const openPicker = async ($: EngineInterface) => {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await update($, current, () => '')
+    const atStart = await currentSlug($)
+    await update($, followed, was => was || atStart)
     await $.command.register({
       name: COMMAND,
       description: 'Pick a Doki or termcn theme for Claude Code and Windows Terminal (arrows + Enter)',
@@ -237,6 +277,17 @@ export const register: Register = on => {
     }
     const opened = await openPicker($)
     return { text: opened.isPlaced ? 'Theme picker opened: arrows to move, Enter to apply.' : 'Theme picker is waiting for room.' }
+  })
+
+  // Claude Code's /theme writes settings.json only and raises no event (seen live 2026-10-06): check at each prompt.
+  // A slash command another plugin answers may not reach this hook; the next typed prompt does.
+  on('prompt.submit', async ($, e, next) => {
+    try {
+      await follow($, await currentPreference($))
+    } catch {
+      // Never block a prompt over a theme.
+    }
+    return next(e)
   })
 
   // The person's Tab, arrows or click moved the ring onto a slot: move the highlight by the slots it travelled.

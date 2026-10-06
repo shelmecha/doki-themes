@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3 (2026-10-06)
+
+- Claude Code's `/theme` and the picker now give the same result. If you pick a Doki or termcn theme with `/theme`, the picker sets the Windows Terminal scheme and the accent file at your next prompt. Before, `/theme` changed only Claude Code.
+- `/theme` lists only the themes that the picker applied one time. Use the picker to get a theme into that list.
+
 ## 0.2.2 (2026-10-06)
 
 - termcn themes: dim text is now readable. Before, the picker used the termcn `muted` color for dim text, but `muted` is a background color. In Kanagawa, dim text was `#16161f` on `#1f1f28`. Now the picker blends the background toward the text color until the contrast is 2.5:1 or more.
