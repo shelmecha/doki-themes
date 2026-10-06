@@ -234,6 +234,37 @@ test('/doki-theme-picker <name> applies directly; an unknown name fails', async 
   expect(bad.exitCode).toBe(1)
 })
 
+const typed = (text: string) => ({ text, wait: false, origin: { kind: 'composer' as const } })
+const accentName = (files: Files) => JSON.parse(files.get(`${HOME}/.claude/mods/theme-accent.json`) ?? '{}').name
+const backups = (files: Files) => [...files.keys()].filter(k => k.includes(norm('/.claude/backups/'))).length
+
+test('/theme sets one of our themes: the next prompt brings Windows Terminal and the accent file along', async ($, on) => {
+  const { files } = world(on)
+  on('prompt.submit', async (_$, e) => ({ text: e.text }))
+  await $.session.start(START)
+  await $.command.run({ ...RUN, args: 'vanilla' })
+  expect(accentName(files)).toBe('Vanilla')
+
+  // Claude Code's /theme writes only settings.json.
+  files.set(SETTINGS, JSON.stringify({ env: { A: '1' }, theme: 'custom:termcn-nord' }, null, 2))
+  await $.prompt.submit(typed('hello'))
+  expect(accentName(files)).toBe('Nord')
+  expect(JSON.parse(files.get(WT)!).profiles.list[0].colorScheme).toBe('termcn Nord')
+  // settings.json is left as the person set it.
+  expect(JSON.parse(files.get(SETTINGS)!).theme).toBe('custom:termcn-nord')
+
+  // In step: the next prompt writes nothing.
+  const before = backups(files)
+  await $.prompt.submit(typed('again'))
+  expect(backups(files)).toBe(before)
+
+  // A built-in theme is not ours: nothing follows.
+  files.set(SETTINGS, JSON.stringify({ theme: 'dark' }, null, 2))
+  await $.prompt.submit(typed('dark now'))
+  expect(accentName(files)).toBe('Nord')
+  expect(backups(files)).toBe(before)
+})
+
 test('termcn themes sit under their own sticky header in the list', async ($, on) => {
   world(on)
   await $.session.start(START)

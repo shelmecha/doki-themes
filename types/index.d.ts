@@ -48,7 +48,10 @@ export type Accent = {
 
 declare module 'claude-code' {
   interface PluginState {
-    /** highlight: the slug under the focus ring; current: the slug last applied. */
-    'doki-theme-picker': { highlight: string; current: string }
+    /**
+     * highlight: the slug under the focus ring; current: the slug last applied;
+     * followed: the slug whose Windows Terminal scheme and accent were last written.
+     */
+    'doki-theme-picker': { highlight: string; current: string; followed: string }
   }
 }

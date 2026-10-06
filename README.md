@@ -37,6 +37,8 @@ To apply a theme without the picker, type its name after the command:
 /doki-theme-picker termcn dracula
 ```
 
+Claude Code's own `/theme` command also lists each theme that the picker applied one time. If you pick one of these themes with `/theme`, the picker sets the Windows Terminal scheme and the accent file at your next prompt.
+
 ## What the picker changes
 
 When you press Enter, the picker writes only these files:
