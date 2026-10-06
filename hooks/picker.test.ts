@@ -204,6 +204,22 @@ test('the window slides: focusing the last drawn theme draws the next one', asyn
   await ui.unmount()
 })
 
+test('a click on a theme the ring is not on applies that theme, not the highlight', async ($, on) => {
+  const { files, log } = world(on)
+  await $.session.start(START)
+  await $.command.run({ ...RUN, args: '' })
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'Pane', requestId: PANE, props: paneProps(30) })
+  expect(await headerText(ui as never)).toContain(named('ram'))
+  // A click raises only ui.press for the clicked slot; the ring and the highlight stay on Ram (seen live 2026-10-06).
+  const remKey = await keyOf(ui as never, 'rem')
+  expect(remKey).not.toBe(await keyOf(ui as never, 'ram'))
+  await ui.press({ key: remKey })
+  expect(JSON.parse(files.get(SETTINGS)!).theme).toBe('custom:doki-rem')
+  expect(log.toasts).toEqual(['Theme: Doki Rem'])
+  expect(log.closed).toEqual([PANE])
+  await ui.unmount()
+})
+
 test('/doki-theme-picker <name> applies directly; an unknown name fails', async ($, on) => {
   const { files } = world(on)
   await $.session.start(START)

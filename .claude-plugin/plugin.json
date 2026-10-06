@@ -1,8 +1,8 @@
 {
   "name": "doki-theme-picker",
   "displayName": "Doki Theme Picker",
-  "version": "0.2.0",
-  "description": "/doki-theme-picker: browse 88 Doki themes and the termcn themes in a pane with a preview. Enter applies the theme to Claude Code and Windows Terminal. Windows only.",
+  "version": "0.2.1",
+  "description": "/doki-theme-picker: browse 88 Doki themes and the termcn themes in a pane with a preview. Enter or a click applies the theme to Claude Code and Windows Terminal. Windows only.",
   "author": { "name": "Shelvi", "url": "https://github.com/shelmecha" },
   "homepage": "https://github.com/shelmecha/doki-themes#readme",
   "repository": "https://github.com/shelmecha/doki-themes",
