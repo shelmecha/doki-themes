@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 (2026-10-06)
+
+- termcn themes: dim text is now readable. Before, the picker used the termcn `muted` color for dim text, but `muted` is a background color. In Kanagawa, dim text was `#16161f` on `#1f1f28`. Now the picker blends the background toward the text color until the contrast is 2.5:1 or more.
+- Re-apply a termcn theme to get the new color. The picker writes the theme files only when you apply a theme.
+
 ## 0.2.1 (2026-10-06)
 
 - A mouse click on a theme in the list applies that theme. Before, a click applied the theme under the highlight, not the theme you clicked.

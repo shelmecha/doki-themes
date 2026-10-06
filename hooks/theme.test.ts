@@ -3,6 +3,8 @@ import { expect, test } from 'claude-code/testing'
 import {
   PROTECTED_TOKEN,
   RAM_ACCENT,
+  SUBTLE_CONTRAST,
+  contrast,
   findTheme,
   lightness,
   matchStyle,
@@ -236,7 +238,7 @@ test('a termcn theme maps onto the picker colors', async () => {
   const t = toTermcnTheme(DRACULA)
   expect(t).toMatchObject({ name: 'Dracula', slug: 'termcn-dracula', dark: true, source: 'termcn' })
   expect(t.colors).toMatchObject({
-    bg: '#282A36', fg: '#F8F8F2', accent: '#FF79C6', muted: '#6272A4', subtle: '#44475A', selection: '#44475A', cursor: '#BD93F9',
+    bg: '#282A36', fg: '#F8F8F2', accent: '#FF79C6', muted: '#6272A4', selection: '#44475A', cursor: '#BD93F9',
     red: '#FF5555', error: '#FF5555', green: '#50FA7B', constant: '#50FA7B', yellow: '#F1FA8C', cls: '#F1FA8C',
     blue: '#8BE9FD', cyan: '#8BE9FD', interface: '#8BE9FD', magenta: '#FF79C6', purple: '#BD93F9', func: '#BD93F9', bool: '#FF79C6',
   })
@@ -246,6 +248,17 @@ test('a termcn theme maps onto the picker colors', async () => {
   // dark is read off the background's luminance
   expect(luminance('#ffffff')).toBeGreaterThan(0.99)
   expect(toTermcnTheme({ ...DRACULA, colors: { ...DRACULA.colors, background: '#FAFAFA' } }).dark).toBe(false)
+})
+
+test('termcn subtle text is readable on its background in every termcn theme', async () => {
+  // termcn `muted` is a background tint: Dracula's #44475A on #282A36 is only 1.6:1.
+  expect(contrast('#282A36', '#44475A')).toBeLessThan(SUBTLE_CONTRAST)
+  for (const raw of TERMCN_RAW) {
+    const c = toTermcnTheme(raw).colors
+    expect(contrast(c.bg, c.subtle)).toBeGreaterThanOrEqual(SUBTLE_CONTRAST)
+    // still dimmer than the main text
+    expect(contrast(c.bg, c.subtle)).toBeLessThan(contrast(c.bg, c.fg))
+  }
 })
 
 test('termcn slug and preference round-trip, and findTheme finds termcn names', async () => {
