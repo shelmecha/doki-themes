@@ -1,6 +1,6 @@
 # doki-themes
 
-A theme picker for Claude Code on Windows. Type `/doki-theme-picker` to open a pane with 88 Doki themes (dark and light) and 40 termcn themes. Use the arrow keys to see each theme in the preview at the top of the pane. Press Enter to apply the theme to Claude Code and Windows Terminal.
+A theme picker for Claude Code on Windows. Type `/doki-theme-picker` to open a pane with 88 Doki themes (dark and light) and 40 termcn themes. Use the arrow keys to see each theme in the preview at the top of the pane. Press Enter, or click a theme, to apply the theme to Claude Code and Windows Terminal.
 
 ## Requirements
 
@@ -27,6 +27,7 @@ Type `/doki-theme-picker` to open the picker.
 |---|---|
 | Up / Down or Tab | Move through the list and see the preview |
 | Enter | Apply the theme |
+| Mouse click on a theme | Apply that theme |
 | Esc | Close the picker |
 
 To apply a theme without the picker, type its name after the command:

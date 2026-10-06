@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 (2026-10-06)
+
+- A mouse click on a theme in the list applies that theme. Before, a click applied the theme under the highlight, not the theme you clicked.
+- The hint line in the pane names the click.
+
 ## 0.2.0 (2026-10-05)
 
 - Windows Terminal: the scheme goes on the profile of the tab that runs Claude Code. If the picker cannot find that profile, it uses the default profile. Before, it always used the Windows PowerShell profile.
