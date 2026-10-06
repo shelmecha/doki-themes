@@ -70,6 +70,25 @@ export function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
+/** WCAG contrast ratio (1..21) between two #rrggbb colors. */
+export function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number]
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+// The lowest contrast a termcn theme's subtle text gets against its background.
+// Doki themes' own subtle colors have a median of about 3.0.
+export const SUBTLE_CONTRAST = 2.5
+
+/** The first blend of bg toward fg that reaches SUBTLE_CONTRAST: dim, but still readable. */
+function readableSubtle(bg: string, fg: string): string {
+  for (let t = 0.05; t < 1; t += 0.05) {
+    const c = mix(bg, fg, t)
+    if (contrast(bg, c) >= SUBTLE_CONTRAST) return c
+  }
+  return fg
+}
+
 /** A termcn theme as the picker's theme: termcn has no ANSI palette, so the roles stand in for it. */
 export function toTermcnTheme(raw: TermcnRaw): DokiTheme {
   const k = raw.colors
@@ -84,7 +103,8 @@ export function toTermcnTheme(raw: TermcnRaw): DokiTheme {
       fg: k.foreground,
       accent: k.accent,
       muted: k.mutedForeground,
-      subtle: k.muted,
+      // termcn `muted` is a background tint, not a text color: as subtle text it was near-invisible.
+      subtle: readableSubtle(k.background, k.foreground),
       selection: k.selection,
       widget: lightness(k.background, dark ? 0.04 : -0.04),
       cursor: k.focusRing,
