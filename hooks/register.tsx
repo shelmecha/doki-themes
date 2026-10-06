@@ -244,9 +244,10 @@ export const register: Register = on => {
     const slot = slotOfKey(e.element)
     if (slot < 0) return next(e)
     if (e.origin.kind !== 'person') {
-      // The first drawing's autoFocus, or this module's own redirect: the ring is where it says.
-      ringSlot = slot
-      return next(e)
+      // The first drawing's autoFocus, or this module's own redirect: the ring is where it says, unless refused.
+      const result = await next(e)
+      if (!result.deny) ringSlot = slot
+      return result
     }
     return inOrder(async () => {
       const slug = (await read($, highlight)) || FALLBACK.slug
@@ -254,7 +255,7 @@ export const register: Register = on => {
       const index = Math.max(0, LIST.findIndex(t => t.slug === slug))
       // The engine wraps its ring past either end of the buttons it holds (a Down on the last slot lands on slot 0), and
       // a burst can outrun a drawing that has fewer buttons than the new window: a jump of nearly a window's height
-      // is that wrap, one press in the other direction. (A click that far away is read the same way: it does nothing.)
+      // is that wrap, one press in the other direction. (A click never comes here: it raises only ui.press.)
       const wrap = Math.max(2, Math.max(6, bodyRows - PREVIEW_ROWS) - 4)
       const travelled = slot - from <= -wrap ? 1 : slot - from >= wrap ? -1 : slot - from
       const target = LIST[Math.max(0, Math.min(LIST.length - 1, index + travelled))]!
