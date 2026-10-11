@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4 (2026-10-12)
+
+- Backups now go in a folder for each kind of file, under `%USERPROFILE%\.claude\backups\`: `settings\claude\` for `settings.json`, `settings\windows-terminal\` for the Windows Terminal settings, and `themes\` for theme files. The file names do not change. Before, all backups were in `backups\` with no folders. The picker makes a folder if it is not there. It does not move old backups.
+
 ## 0.2.3 (2026-10-06)
 
 - Claude Code's `/theme` and the picker now give the same result. If you pick a Doki or termcn theme with `/theme`, the picker sets the Windows Terminal scheme and the accent file at your next prompt. Before, `/theme` changed only Claude Code.

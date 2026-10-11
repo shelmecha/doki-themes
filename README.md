@@ -48,7 +48,13 @@ When you press Enter, the picker writes only these files:
 - The Windows Terminal `settings.json`: it adds a color scheme and sets it on one profile. The profile is the one of the tab that runs Claude Code. If the picker cannot find that profile, it uses your default profile.
 - `%USERPROFILE%\.claude\mods\theme-accent.json`: an accent color that other mods can read. The picker writes this file only if the `%USERPROFILE%\.claude\mods` folder already exists.
 
-Before it changes `settings.json` or the Windows Terminal settings, it copies the old file to `%USERPROFILE%\.claude\backups\`. To undo a change, copy the backup back. The picker does not delete old backups. You can delete them when you do not need them.
+Before it changes `settings.json`, the Windows Terminal settings or a theme file, it copies the old file to a folder in `%USERPROFILE%\.claude\backups\`:
+
+- `settings\claude\`: copies of `settings.json`.
+- `settings\windows-terminal\`: copies of the Windows Terminal `settings.json`, named `wt-settings.json.<time>`.
+- `themes\`: copies of the theme files.
+
+To undo a change, copy the backup back. The picker does not delete old backups. You can delete them when you do not need them.
 
 ## Update
 
