@@ -147,8 +147,8 @@ test('the picker pane validates on terminal, previews the ring, and Enter applie
   expect(log.toasts).toEqual(['Theme: Doki Vanilla'])
   expect(log.closed).toEqual([PANE])
   // Backups were taken before settings.json and Windows Terminal were changed.
-  expect([...files.keys()].some(k => k.startsWith(norm(`${HOME}/.claude/backups/settings.json.`)))).toBe(true)
-  expect([...files.keys()].some(k => k.startsWith(norm(`${HOME}/.claude/backups/wt-settings.json.`)))).toBe(true)
+  expect([...files.keys()].some(k => k.startsWith(norm(`${HOME}/.claude/backups/settings/claude/settings.json.`)))).toBe(true)
+  expect([...files.keys()].some(k => k.startsWith(norm(`${HOME}/.claude/backups/settings/windows-terminal/wt-settings.json.`)))).toBe(true)
 
   // The list now marks Vanilla as current.
   expect((await buttons(ui as never)).find(b => String(b.props.label) === '●  Vanilla')).toBeDefined()
@@ -232,6 +232,32 @@ test('/doki-theme-picker <name> applies directly; an unknown name fails', async 
   expect(JSON.parse(files.get(SETTINGS)!).theme).toBe('custom:termcn-nord')
   const bad = await $.command.run({ ...RUN, args: 'not-a-theme' })
   expect(bad.exitCode).toBe(1)
+})
+
+test('each backup goes in its section folder under ~/.claude/backups, with the same file name', async ($, on) => {
+  const { files } = world(on)
+  const themePath = `${HOME}/.claude/themes/doki-vanilla.json`
+  const oldSettings = files.get(SETTINGS)!
+  const oldWt = files.get(WT)!
+  files.set(themePath, '{"name":"old vanilla"}')
+  await $.session.start(START)
+  await $.command.run({ ...RUN, args: 'vanilla' })
+
+  const root = norm(`${HOME}/.claude/backups/`)
+  const under = (folder: string, name: string) => [...files.keys()].filter(k => k.startsWith(norm(`${root}${folder}/${name}.`)))
+  const settingsCopies = under('settings/claude', 'settings.json')
+  const wtCopies = under('settings/windows-terminal', 'wt-settings.json')
+  const themeCopies = under('themes', 'doki-vanilla.json')
+  expect(settingsCopies.length).toBe(1)
+  expect(wtCopies.length).toBe(1)
+  expect(themeCopies.length).toBe(1)
+  // Each copy holds the file as it was before the change.
+  expect(files.get(settingsCopies[0]!)).toBe(oldSettings)
+  expect(files.get(wtCopies[0]!)).toBe(oldWt)
+  expect(files.get(themeCopies[0]!)).toBe('{"name":"old vanilla"}')
+  // No backup is left flat in ~/.claude/backups.
+  const flat = [...files.keys()].filter(k => k.startsWith(root) && !k.slice(root.length).includes(norm('/')))
+  expect(flat).toEqual([])
 })
 
 const typed = (text: string) => ({ text, wait: false, origin: { kind: 'composer' as const } })

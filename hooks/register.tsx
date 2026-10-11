@@ -114,9 +114,20 @@ async function readOr($: EngineInterface, path: string): Promise<string | undefi
   }
 }
 
-/** Copies a user file to ~/.claude/backups/<name>.<stamp> before it is changed. */
-async function backup($: EngineInterface, root: string, path: string, name: string, text: string): Promise<string> {
-  const target = `${root}/.claude/backups/${name}.${stamp(new Date())}`
+// The folder under ~/.claude/backups for each kind of file the picker backs up.
+const BACKUP_SECTIONS = {
+  claudeSettings: 'settings/claude',
+  wtSettings: 'settings/windows-terminal',
+  theme: 'themes',
+} as const
+type BackupSection = keyof typeof BACKUP_SECTIONS
+
+/**
+ * Copies a user file to ~/.claude/backups/<section>/<name>.<stamp> before it is changed.
+ * $.fs.write makes the section folder when it is not there.
+ */
+async function backup($: EngineInterface, root: string, section: BackupSection, name: string, text: string): Promise<string> {
+  const target = `${root}/.claude/backups/${BACKUP_SECTIONS[section]}/${name}.${stamp(new Date())}`
   await $.fs.write(target, text)
   return target
 }
@@ -145,7 +156,7 @@ async function apply($: EngineInterface, theme: DokiTheme): Promise<string[]> {
   const themeFile = `${preference.replace(/^custom:/, '')}.json`
   const themePath = `${root}/.claude/themes/${themeFile}`
   const oldTheme = await readOr($, themePath)
-  if (oldTheme !== undefined) await backup($, root, themePath, themeFile, oldTheme)
+  if (oldTheme !== undefined) await backup($, root, 'theme', themeFile, oldTheme)
   await $.fs.write(themePath, JSON.stringify(toClaudeTheme(theme), null, 2) + '\n')
   notes.push(`theme file ${themePath}`)
 
@@ -166,7 +177,7 @@ async function apply($: EngineInterface, theme: DokiTheme): Promise<string[]> {
       notes.push('settings.json theme')
     } else if ((JSON.parse(settings) as { theme?: unknown }).theme !== preference) {
       const next = updateClaudeSettings(settings, preference)
-      await backup($, root, settingsPath, 'settings.json', settings)
+      await backup($, root, 'claudeSettings', 'settings.json', settings)
       await $.fs.write(settingsPath, next)
       notes.push('settings.json theme')
     }
@@ -200,7 +211,7 @@ async function applyOutside($: EngineInterface, root: string, theme: DokiTheme):
   if (wt !== undefined) {
     try {
       const next = updateWtSettings(wt, toWtScheme(theme), await $.env.get('WT_PROFILE_ID'))
-      await backup($, root, wtPath, 'wt-settings.json', wt)
+      await backup($, root, 'wtSettings', 'wt-settings.json', wt)
       await $.fs.write(wtPath, next)
       notes.push('Windows Terminal scheme')
     } catch (error) {
