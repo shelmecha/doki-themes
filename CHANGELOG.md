@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.5 (2026-10-12)
+
+- Light themes: text is now dark enough to read. Before, light themes kept some colors that are made for a dark background. In Emilia Light, dim text was `#aaaaaa` (2.1:1) and the warning color was `#EFA554` (1.9:1). Now the picker makes each text color darker until its contrast is 7:1 for the main text, 3.5:1 for dim text and 4.5:1 for all other text. Dark themes do not change.
+- The accent file gets the same darker colors, so other mods can read them on a light background.
+- Re-apply a light theme to get the new colors. The picker writes the theme files only when you apply a theme.
+
 ## 0.2.4 (2026-10-12)
 
 - Backups now go in a folder for each kind of file, under `%USERPROFILE%\.claude\backups\`: `settings\claude\` for `settings.json`, `settings\windows-terminal\` for the Windows Terminal settings, and `themes\` for theme files. The file names do not change. Before, all backups were in `backups\` with no folders. The picker makes a folder if it is not there. It does not move old backups.
