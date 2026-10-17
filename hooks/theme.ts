@@ -89,6 +89,22 @@ function readableSubtle(bg: string, fg: string): string {
   return fg
 }
 
+// The lowest contrast text gets against a light theme's background. Doki light themes keep
+// dark-theme role colors (subtle #aaaaaa, warning #EFA554): 1.5 to 2.8:1 on a light page.
+export const TEXT_CONTRAST = 7
+export const ROLE_CONTRAST = 4.5
+export const LIGHT_SUBTLE_CONTRAST = 3.5
+
+/** `color` darkened (light `bg`) or lightened (dark `bg`) in 1% steps until it reaches `min`; unchanged if it already does. */
+export function readableOn(bg: string, color: string, min: number): string {
+  const step = luminance(bg) < 0.5 ? 0.01 : -0.01
+  for (let i = 0; i <= 100; i++) {
+    const c = i === 0 ? color : lightness(color, step * i)
+    if (contrast(bg, c) >= min) return c
+  }
+  return step < 0 ? '#000000' : '#ffffff'
+}
+
 /** A termcn theme as the picker's theme: termcn has no ANSI palette, so the roles stand in for it. */
 export function toTermcnTheme(raw: TermcnRaw): DokiTheme {
   const k = raw.colors
@@ -133,34 +149,61 @@ export const sourceLabel = (theme: DokiTheme): string => (theme.source === 'term
 /** The Claude Code theme preference for a theme: custom:doki-ram, custom:termcn-dracula. */
 export const preferenceOf = (theme: DokiTheme): string => (theme.source === 'termcn' ? `custom:${theme.slug}` : `custom:doki-${theme.slug}`)
 
+/**
+ * The one theme file the picker rewrites at each pick (~/.claude/themes/doki-theme-picker.json) and the preference
+ * that names it. Claude Code reads the theme preference only at start or from /theme, but it reloads a custom theme
+ * file when the file changes (seen in 2.1.302): a preference that always names this file shows each pick at once.
+ */
+export const LIVE_SLUG = 'doki-theme-picker'
+export const LIVE_PREFERENCE = `custom:${LIVE_SLUG}`
+
+/** The name /theme shows for the live file: the theme's own name with " (picker)". */
+const liveName = (theme: DokiTheme): string => `${sourceLabel(theme)} ${theme.name} (picker)`
+
 export type ClaudeTheme = { name: string; base: 'dark-daltonized' | 'light-daltonized'; overrides: Record<string, string> }
+
+/** The live file's copy of a theme: the same colors as its own file, a name that tells the two apart in /theme. */
+export function toLiveTheme(theme: DokiTheme): ClaudeTheme {
+  return { ...toClaudeTheme(theme), name: liveName(theme) }
+}
+
+/** The slug of the theme the live file holds, by its name; "" when the text is not a live file of a known theme. */
+export function slugOfLiveTheme(text: string | undefined, themes: readonly DokiTheme[] = THEMES): string {
+  try {
+    const name = (JSON.parse(text ?? '') as { name?: unknown }).name
+    return themes.find(t => liveName(t) === name)?.slug ?? ''
+  } catch {
+    return ''
+  }
+}
 
 /** The same tokens ~/.claude/themes/doki-ram.json sets, sourced from the theme's own colors. */
 export function toClaudeTheme(theme: DokiTheme): ClaudeTheme {
   const c = theme.colors
   // Dark themes lift message backgrounds toward light; light themes push them toward dark.
   const lift = (d: number) => lightness(c.bg, theme.dark ? d : -d)
+  const ink = (hex: string, min = ROLE_CONTRAST) => inkFor(theme, hex, min)
   return {
     name: `${sourceLabel(theme)} ${theme.name}`,
     base: theme.dark ? 'dark-daltonized' : 'light-daltonized',
     overrides: {
-      claude: c.accent,
-      text: c.fg,
+      claude: ink(c.accent),
+      text: ink(c.fg, TEXT_CONTRAST),
       inverseText: c.widget,
-      inactive: c.muted,
-      subtle: c.subtle,
-      suggestion: c.interface,
-      permission: c.purple,
-      remember: c.func,
-      warning: c.yellow,
-      merged: c.purple,
+      inactive: ink(c.muted),
+      subtle: ink(c.subtle, LIGHT_SUBTLE_CONTRAST),
+      suggestion: ink(c.interface),
+      permission: ink(c.purple),
+      remember: ink(c.func),
+      warning: ink(c.yellow),
+      merged: ink(c.purple),
       promptBorder: c.selection,
-      planMode: c.cyan,
-      autoAccept: c.func,
+      planMode: ink(c.cyan),
+      autoAccept: ink(c.func),
       bashBorder: c.yellow,
-      ide: c.constant,
-      fastMode: c.cls,
-      effortUltra: c.bool,
+      ide: ink(c.constant),
+      fastMode: ink(c.cls),
+      effortUltra: ink(c.bool),
       userMessageBackground: lift(0.033),
       userMessageBackgroundHover: lift(0.065),
       bashMessageBackgroundColor: mix(c.bg, c.yellow, 0.03),
@@ -168,10 +211,15 @@ export function toClaudeTheme(theme: DokiTheme): ClaudeTheme {
       selectionBg: c.selection,
       rate_limit_fill: c.accent,
       rate_limit_empty: lift(0.08),
-      briefLabelYou: c.interface,
-      briefLabelClaude: c.accent,
+      briefLabelYou: ink(c.interface),
+      briefLabelClaude: ink(c.accent),
     },
   }
+}
+
+/** A text color as the theme shows it: light themes darken it to `min` contrast; dark themes keep the source color. */
+function inkFor(theme: DokiTheme, hex: string, min: number): string {
+  return theme.dark ? hex : readableOn(theme.colors.bg, hex, min)
 }
 
 export type WtScheme = Record<string, string>
@@ -210,7 +258,16 @@ export function toWtScheme(theme: DokiTheme): WtScheme {
 
 export function toAccent(theme: DokiTheme): Accent {
   const c = theme.colors
-  return { name: theme.name, dark: theme.dark, accent: c.accent, accent2: c.interface, muted: c.muted, text: c.fg, subtle: c.subtle }
+  const ink = (hex: string, min = ROLE_CONTRAST) => inkFor(theme, hex, min)
+  return {
+    name: theme.name,
+    dark: theme.dark,
+    accent: ink(c.accent),
+    accent2: ink(c.interface),
+    muted: ink(c.muted),
+    text: ink(c.fg, TEXT_CONTRAST),
+    subtle: ink(c.subtle, LIGHT_SUBTLE_CONTRAST),
+  }
 }
 
 /** Reads the accent file's text; anything missing or malformed falls back to Ram. */
@@ -252,9 +309,12 @@ export function findTheme(query: string, themes: readonly DokiTheme[] = THEMES):
   )
 }
 
-/** The slug in a theme preference ("custom:doki-ram" -> "ram", "custom:termcn-nord" -> "termcn-nord"), or "" for a built-in theme. */
+/**
+ * The slug in a theme preference ("custom:doki-ram" -> "ram", "custom:termcn-nord" -> "termcn-nord"), or "" for a
+ * built-in theme and for the live file (its theme is in the file: slugOfLiveTheme).
+ */
 export function slugOfPreference(preference: unknown): string {
-  if (typeof preference !== 'string') return ''
+  if (typeof preference !== 'string' || preference === LIVE_PREFERENCE) return ''
   if (preference.startsWith('custom:doki-')) return preference.slice('custom:doki-'.length)
   return preference.startsWith('custom:termcn-') ? preference.slice('custom:'.length) : ''
 }

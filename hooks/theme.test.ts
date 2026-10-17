@@ -1,9 +1,14 @@
 import { expect, test } from 'claude-code/testing'
 
 import {
+  LIGHT_SUBTLE_CONTRAST,
+  LIVE_PREFERENCE,
   PROTECTED_TOKEN,
   RAM_ACCENT,
+  ROLE_CONTRAST,
   SUBTLE_CONTRAST,
+  TEXT_CONTRAST,
+  THEMES as ALL_THEMES,
   contrast,
   findTheme,
   lightness,
@@ -12,10 +17,13 @@ import {
   ordered,
   preferenceOf,
   parseAccent,
+  readableOn,
+  slugOfLiveTheme,
   slugOfPreference,
   swatchCells,
   toAccent,
   toClaudeTheme,
+  toLiveTheme,
   toTermcnTheme,
   toWtScheme,
   updateClaudeSettings,
@@ -136,6 +144,51 @@ test('light themes get light-daltonized', async () => {
   // Light message backgrounds are darker than the page, not lighter.
   const page = channels(senko.colors.bg).reduce((a, b) => a + b)
   expect(channels(toClaudeTheme(senko).overrides.userMessageBackground!).reduce((a, b) => a + b) < page).toBe(true)
+})
+
+// The Claude Code tokens that are text, and the contrast each needs on a light theme's background.
+const TEXT_TOKENS: Record<string, number> = {
+  text: TEXT_CONTRAST,
+  subtle: LIGHT_SUBTLE_CONTRAST,
+  ...Object.fromEntries(
+    ['claude', 'inactive', 'suggestion', 'permission', 'remember', 'warning', 'merged', 'planMode', 'autoAccept', 'ide', 'fastMode', 'effortUltra', 'briefLabelYou', 'briefLabelClaude'].map(
+      t => [t, ROLE_CONTRAST],
+    ),
+  ),
+}
+
+test('light themes darken every text color to a readable contrast', async () => {
+  const light = ALL_THEMES.filter(t => !t.dark)
+  expect(light.length).toBeGreaterThanOrEqual(24)
+  for (const t of light) {
+    const o = toClaudeTheme(t).overrides
+    for (const [token, min] of Object.entries(TEXT_TOKENS)) {
+      expect(contrast(t.colors.bg, o[token]!) >= min, `${t.name}: ${token} ${o[token]} on ${t.colors.bg}`).toBe(true)
+    }
+    const a = toAccent(t)
+    expect(contrast(t.colors.bg, a.text) >= TEXT_CONTRAST, `${t.name}: accent text`).toBe(true)
+    for (const hex of [a.accent, a.accent2, a.muted]) expect(contrast(t.colors.bg, hex) >= ROLE_CONTRAST, `${t.name}: accent ${hex}`).toBe(true)
+    expect(contrast(t.colors.bg, a.subtle) >= LIGHT_SUBTLE_CONTRAST, `${t.name}: accent subtle`).toBe(true)
+  }
+  // Emilia Light: the faint Doki colors get darker; the dark main text stays as it is.
+  const emilia = toClaudeTheme(findTheme('emilia light')!).overrides
+  expect(emilia.text).toBe('#4D4D4A')
+  expect(emilia.subtle).not.toBe('#aaaaaa')
+  expect(emilia.warning).not.toBe('#EFA554')
+})
+
+test('dark themes keep their source text colors', async () => {
+  for (const t of ALL_THEMES.filter(t => t.dark)) {
+    const o = toClaudeTheme(t).overrides
+    expect([o.text, o.subtle, o.warning, o.planMode, o.claude], t.name).toEqual([t.colors.fg, t.colors.subtle, t.colors.yellow, t.colors.cyan, t.colors.accent])
+  }
+})
+
+test('readableOn keeps a passing color and moves a faint one away from the background', async () => {
+  expect(readableOn('#fbf0ff', '#4D4D4A', 7)).toBe('#4D4D4A')
+  expect(contrast('#fbf0ff', readableOn('#fbf0ff', '#aaaaaa', 3.5))).toBeGreaterThanOrEqual(3.5)
+  expect(luminance(readableOn('#fbf0ff', '#aaaaaa', 3.5))).toBeLessThan(luminance('#aaaaaa'))
+  expect(luminance(readableOn('#282A36', '#44475A', 4.5))).toBeGreaterThan(luminance('#44475A'))
 })
 
 test('every Windows Terminal scheme has the 16 ansi colors', async () => {
@@ -273,6 +326,25 @@ test('termcn slug and preference round-trip, and findTheme finds termcn names', 
   expect(findTheme('nord')?.slug).toBe('termcn-nord')
   expect(findTheme('ram')?.slug).toBe('ram')
   expect(new Set(TERMCN_RAW.map(r => `termcn-${r.slug}`)).size).toBe(TERMCN_RAW.length)
+})
+
+test('the live file holds the same colors, and its name finds the theme again', async () => {
+  expect(LIVE_PREFERENCE).toBe('custom:doki-theme-picker')
+  // The live preference is not a theme slug: "theme-picker" must not reach findTheme.
+  expect(slugOfPreference(LIVE_PREFERENCE)).toBe('')
+  for (const theme of ALL_THEMES) {
+    const own = toClaudeTheme(theme)
+    const live = toLiveTheme(theme)
+    expect(live.name).toBe(`${own.name} (picker)`)
+    expect(live.base).toBe(own.base)
+    expect(live.overrides).toEqual(own.overrides)
+    expect(slugOfLiveTheme(JSON.stringify(live, null, 2) + '\n')).toBe(theme.slug)
+  }
+  // Each name is used once, so the name in the live file names one theme.
+  expect(new Set(ALL_THEMES.map(t => toLiveTheme(t).name)).size).toBe(ALL_THEMES.length)
+  expect(slugOfLiveTheme(undefined)).toBe('')
+  expect(slugOfLiveTheme('{bad json')).toBe('')
+  expect(slugOfLiveTheme(JSON.stringify(toClaudeTheme(findTheme('ram')!)))).toBe('')
 })
 
 test('list groups Doki first, then termcn, each dark before light', async () => {

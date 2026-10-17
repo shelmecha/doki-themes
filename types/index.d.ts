@@ -50,8 +50,9 @@ declare module 'claude-code' {
   interface PluginState {
     /**
      * highlight: the slug under the focus ring; current: the slug last applied;
-     * followed: the slug whose Windows Terminal scheme and accent were last written.
+     * followed: the slug whose Windows Terminal scheme and accent were last written;
+     * live: the theme preference Claude Code draws with now; seen: the preference settings.json last held.
      */
-    'doki-theme-picker': { highlight: string; current: string; followed: string }
+    'doki-theme-picker': { highlight: string; current: string; followed: string; live: string; seen: string }
   }
 }

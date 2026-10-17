@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.6 (2026-10-18)
+
+- Claude Code now shows the theme you pick at once. Before, the picker changed Windows Terminal at once, but Claude Code kept the old theme until you used `/theme` or started Claude Code again. Claude Code reads the theme in `settings.json` only when it starts and from `/theme`, but it reads a theme file again when the file changes.
+- The picker now also writes each theme to one fixed file, `%USERPROFILE%\.claude\themes\doki-theme-picker.json`, and sets `settings.json` to `custom:doki-theme-picker`. `/theme` shows this file as "<theme> (picker)". The theme's own file stays, so `/theme` still lists each theme.
+- Restart Claude Code one time when the picker says "Restart Claude Code one time to see it here." It says this when Claude Code uses a different theme file: at the first pick after the update, and after you pick a theme with `/theme`. After the restart, each pick shows at once.
+
+## 0.2.5 (2026-10-12)
+
+- Light themes: text is now dark enough to read. Before, light themes kept some colors that are made for a dark background. In Emilia Light, dim text was `#aaaaaa` (2.1:1) and the warning color was `#EFA554` (1.9:1). Now the picker makes each text color darker until its contrast is 7:1 for the main text, 3.5:1 for dim text and 4.5:1 for all other text. Dark themes do not change.
+- The accent file gets the same darker colors, so other mods can read them on a light background.
+- Re-apply a light theme to get the new colors. The picker writes the theme files only when you apply a theme.
+
 ## 0.2.4 (2026-10-12)
 
 - Backups now go in a folder for each kind of file, under `%USERPROFILE%\.claude\backups\`: `settings\claude\` for `settings.json`, `settings\windows-terminal\` for the Windows Terminal settings, and `themes\` for theme files. The file names do not change. Before, all backups were in `backups\` with no folders. The picker makes a folder if it is not there. It does not move old backups.

@@ -37,14 +37,17 @@ To apply a theme without the picker, type its name after the command:
 /doki-theme-picker termcn dracula
 ```
 
-Claude Code's own `/theme` command also lists each theme that the picker applied one time. If you pick one of these themes with `/theme`, the picker sets the Windows Terminal scheme and the accent file at your next prompt.
+Claude Code shows the new theme at once. At the first pick after you install or update the picker, and after you pick a theme with `/theme`, the picker says "Restart Claude Code one time to see it here." Windows Terminal changes at once. Restart Claude Code one time; after that, each pick shows at once.
+
+Claude Code's own `/theme` command also lists each theme that the picker applied one time. If you pick one of these themes with `/theme`, the picker sets the Windows Terminal scheme and the accent file at your next prompt. `/theme` also lists "<theme> (picker)": the theme that the picker applied last.
 
 ## What the picker changes
 
 When you press Enter, the picker writes only these files:
 
 - `%USERPROFILE%\.claude\themes\<theme>.json`: the Claude Code theme.
-- `%USERPROFILE%\.claude\settings.json`: the `theme` value.
+- `%USERPROFILE%\.claude\themes\doki-theme-picker.json`: a copy of the theme, with "(picker)" after its name. The picker writes this file at each pick. Claude Code reads a theme file again when it changes, so this file makes each pick show at once.
+- `%USERPROFILE%\.claude\settings.json`: the `theme` value, `custom:doki-theme-picker`.
 - The Windows Terminal `settings.json`: it adds a color scheme and sets it on one profile. The profile is the one of the tab that runs Claude Code. If the picker cannot find that profile, it uses your default profile.
 - `%USERPROFILE%\.claude\mods\theme-accent.json`: an accent color that other mods can read. The picker writes this file only if the `%USERPROFILE%\.claude\mods` folder already exists.
 
@@ -73,14 +76,14 @@ Restart Claude Code after the update.
 
 The uninstall does not change your current theme. To go back to a built-in theme, use `/config`. To remove all the files that the picker wrote:
 
-1. Delete the `doki-*.json` and `termcn-*.json` files in `%USERPROFILE%\.claude\themes\`.
+1. Delete the `doki-*.json` and `termcn-*.json` files in `%USERPROFILE%\.claude\themes\`. This includes `doki-theme-picker.json`.
 2. In Windows Terminal, open Settings > Color schemes and delete the `Doki ...` and `termcn ...` schemes.
 3. Delete `%USERPROFILE%\.claude\mods\theme-accent.json`, if it exists.
 
 ## Problems
 
 - **The command is not found after the install.** Restart Claude Code. The picker registers its command when a session starts.
-- **The Claude Code theme does not change after Enter.** Restart Claude Code.
+- **The Claude Code theme does not change after Enter.** Restart Claude Code one time. Claude Code reads the theme value only when it starts and from `/theme`. After the restart, it uses the picker's file, and each pick shows at once.
 - **The Windows Terminal colors do not change.** Make sure that Claude Code runs in Windows Terminal. The picker skips Windows Terminal if its `settings.json` has comments or trailing commas, because it cannot read that file safely.
 
 ## For developers

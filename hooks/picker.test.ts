@@ -59,9 +59,10 @@ function world(on: On, env: Record<string, string> = {}) {
     files.set(e.path, e.text)
     return { value: undefined }
   })
+  // The engine refuses a plugin's theme change: the row changes only through its /theme dialog (seen live 2026-10-05).
   on('config.set', async (_$, e) => {
     log.config.push(e.value)
-    return { value: e.value }
+    return { deny: 'only its dialog changes it' }
   })
   on('ui.toast', async (_$, e) => {
     log.toasts.push(e.text)
@@ -85,6 +86,9 @@ function world(on: On, env: Record<string, string> = {}) {
 }
 
 const START = { cwd: HOME, surface: 'terminal' as const, isInteractive: true }
+const LIVE = 'custom:doki-theme-picker'
+const LIVE_FILE = `${HOME}/.claude/themes/doki-theme-picker.json`
+const RESTART = '. Restart Claude Code one time to see it here.'
 const RUN = { command: 'doki-theme-picker', origin: { kind: 'composer' as const }, presentation: { isFullscreen: true, columns: 160 } }
 const person = { kind: 'person' as const }
 const focus = (element: string) => ({ component: 'Pane' as const, requestId: PANE, plugin: PLUGIN, element, origin: person })
@@ -138,13 +142,19 @@ test('the picker pane validates on terminal, previews the ring, and Enter applie
   const theme = JSON.parse(files.get(`${HOME}/.claude/themes/doki-vanilla.json`)!)
   expect(theme.name).toBe('Doki Vanilla')
   expect(theme.base).toBe('dark-daltonized')
-  expect(log.config).toEqual(['custom:doki-vanilla'])
-  expect(JSON.parse(files.get(SETTINGS)!).theme).toBe('custom:doki-vanilla')
+  // The preference names the live file, which holds the same colors under a name of its own.
+  expect(log.config).toEqual([LIVE])
+  expect(JSON.parse(files.get(SETTINGS)!).theme).toBe(LIVE)
+  const liveTheme = JSON.parse(files.get(LIVE_FILE)!)
+  expect(liveTheme.name).toBe('Doki Vanilla (picker)')
+  expect(liveTheme.overrides).toEqual(theme.overrides)
+  expect(liveTheme.base).toBe(theme.base)
   expect(JSON.parse(files.get(SETTINGS)!).env).toEqual({ A: '1' })
   const wt = JSON.parse(files.get(WT)!)
   expect(wt.profiles.list[0].colorScheme).toBe('Doki Vanilla')
   expect(JSON.parse(files.get(`${HOME}/.claude/mods/theme-accent.json`)!).name).toBe('Vanilla')
-  expect(log.toasts).toEqual(['Theme: Doki Vanilla'])
+  // This session started on Ram's own file: Claude Code shows the live file from its next start.
+  expect(log.toasts).toEqual([`Theme: Doki Vanilla${RESTART}`])
   expect(log.closed).toEqual([PANE])
   // Backups were taken before settings.json and Windows Terminal were changed.
   expect([...files.keys()].some(k => k.startsWith(norm(`${HOME}/.claude/backups/settings/claude/settings.json.`)))).toBe(true)
@@ -183,7 +193,7 @@ test('a fresh home: the tab Windows Terminal profile gets the scheme, and no mod
   expect(wt.profiles.list[1].colorScheme).toBe('Doki Vanilla')
   expect([...files.keys()].some(k => k.includes(norm('/.claude/mods/')))).toBe(false)
   // No settings.json before: one is made that holds only the theme.
-  expect(JSON.parse(files.get(SETTINGS)!)).toEqual({ theme: 'custom:doki-vanilla' })
+  expect(JSON.parse(files.get(SETTINGS)!)).toEqual({ theme: LIVE })
 })
 
 test('the window slides: focusing the last drawn theme draws the next one', async ($, on) => {
@@ -214,8 +224,9 @@ test('a click on a theme the ring is not on applies that theme, not the highligh
   const remKey = await keyOf(ui as never, 'rem')
   expect(remKey).not.toBe(await keyOf(ui as never, 'ram'))
   await ui.press({ key: remKey })
-  expect(JSON.parse(files.get(SETTINGS)!).theme).toBe('custom:doki-rem')
-  expect(log.toasts).toEqual(['Theme: Doki Rem'])
+  expect(JSON.parse(files.get(SETTINGS)!).theme).toBe(LIVE)
+  expect(JSON.parse(files.get(LIVE_FILE)!).name).toBe('Doki Rem (picker)')
+  expect(log.toasts).toEqual([`Theme: Doki Rem${RESTART}`])
   expect(log.closed).toEqual([PANE])
   await ui.unmount()
 })
@@ -229,7 +240,9 @@ test('/doki-theme-picker <name> applies directly; an unknown name fails', async 
   const nord = await $.command.run({ ...RUN, args: 'nord' })
   expect(nord.text).toContain('Theme: termcn Nord')
   expect(JSON.parse(files.get(`${HOME}/.claude/themes/termcn-nord.json`)!).name).toBe('termcn Nord')
-  expect(JSON.parse(files.get(SETTINGS)!).theme).toBe('custom:termcn-nord')
+  expect(JSON.parse(files.get(LIVE_FILE)!).name).toBe('termcn Nord (picker)')
+  expect(JSON.parse(files.get(SETTINGS)!).theme).toBe(LIVE)
+  expect(nord.text).toContain('Claude Code changes after a restart')
   const bad = await $.command.run({ ...RUN, args: 'not-a-theme' })
   expect(bad.exitCode).toBe(1)
 })
@@ -289,6 +302,43 @@ test('/theme sets one of our themes: the next prompt brings Windows Terminal and
   await $.prompt.submit(typed('dark now'))
   expect(accentName(files)).toBe('Nord')
   expect(backups(files)).toBe(before)
+})
+
+test('a session that started on the live file shows each pick at once: no restart', async ($, on) => {
+  const { files, log } = world(on)
+  on('prompt.submit', async (_$, e) => ({ text: e.text }))
+  files.set(SETTINGS, JSON.stringify({ theme: LIVE }, null, 2))
+  files.set(LIVE_FILE, JSON.stringify({ name: 'Doki Rem (picker)', base: 'dark-daltonized', overrides: {} }))
+  await $.session.start(START)
+
+  // The picker opens on the theme the live file holds.
+  await $.command.run({ ...RUN, args: '' })
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'Pane', requestId: PANE, props: paneProps(30) })
+  expect(await ui.find({ type: 'Text', text: 'Doki Rem · dark · current' }), 'rem current').toBeDefined()
+  await ui.unmount()
+
+  const done = await $.command.run({ ...RUN, args: 'vanilla' })
+  expect(done.text).not.toContain('restart')
+  expect(JSON.parse(files.get(LIVE_FILE)!).name).toBe('Doki Vanilla (picker)')
+  // settings.json already names the live file: it is not written again.
+  expect(files.get(SETTINGS)).toBe(JSON.stringify({ theme: LIVE }, null, 2))
+  // The old live file was backed up before it was rewritten.
+  expect([...files.keys()].some(k => k.startsWith(norm(`${HOME}/.claude/backups/themes/doki-theme-picker.json.`)))).toBe(true)
+  await $.command.run({ ...RUN, args: 'emilia light' })
+  expect(JSON.parse(files.get(LIVE_FILE)!).base).toBe('light-daltonized')
+  expect(log.toasts).toEqual(['Theme: Doki Vanilla', 'Theme: Doki Emilia Light'])
+
+  // Another session's picker writes the same preference: nothing changes here.
+  await $.prompt.submit(typed('hello'))
+  expect(accentName(files)).toBe('Emilia Light')
+
+  // /theme picks a theme's own file: Claude Code draws that file now, so the next pick needs a restart again.
+  files.set(SETTINGS, JSON.stringify({ theme: 'custom:doki-rem' }, null, 2))
+  await $.prompt.submit(typed('after /theme'))
+  expect(accentName(files)).toBe('Rem')
+  await $.command.run({ ...RUN, args: 'vanilla' })
+  expect(log.toasts[log.toasts.length - 1]).toBe(`Theme: Doki Vanilla${RESTART}`)
+  expect(JSON.parse(files.get(SETTINGS)!).theme).toBe(LIVE)
 })
 
 test('termcn themes sit under their own sticky header in the list', async ($, on) => {

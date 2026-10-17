@@ -3,15 +3,19 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { DokiTheme } from '../types'
 import {
+  LIVE_PREFERENCE,
+  LIVE_SLUG,
   findTheme,
   ordered,
   preferenceOf,
+  slugOfLiveTheme,
   slugOfPreference,
   sourceLabel,
   stamp,
   swatchCells,
   toAccent,
   toClaudeTheme,
+  toLiveTheme,
   toWtScheme,
   updateClaudeSettings,
   updateWtSettings,
@@ -32,6 +36,11 @@ const highlight = atom({ plugin: 'doki-theme-picker', key: 'highlight' } as cons
 const current = atom({ plugin: 'doki-theme-picker', key: 'current' } as const, '')
 // The theme whose scheme and accent were last written, for follow() when there is no accent file.
 const followed = atom({ plugin: 'doki-theme-picker', key: 'followed' } as const, '')
+// The theme preference Claude Code draws with now. It reads the preference only at start and from /theme
+// (seen in 2.1.302), so a pick shows at once only when this is the live file's preference.
+const live = atom({ plugin: 'doki-theme-picker', key: 'live' } as const, '')
+// The preference settings.json held when this module last read or wrote it: a change it did not make is /theme's.
+const seen = atom({ plugin: 'doki-theme-picker', key: 'seen' } as const, '')
 
 const LIST = ordered()
 // The rows the list draws, group headers included: what the window slides over.
@@ -143,28 +152,54 @@ async function currentPreference($: EngineInterface): Promise<unknown> {
 }
 
 async function currentSlug($: EngineInterface): Promise<string> {
-  return slugOfPreference(await currentPreference($))
+  const preference = await currentPreference($)
+  if (preference !== LIVE_PREFERENCE) return slugOfPreference(preference)
+  return slugOfLiveTheme(await readOr($, `${await home($)}/.claude/themes/${LIVE_SLUG}.json`))
+}
+
+/**
+ * Reads the preference in settings.json and keeps `live` in step: a change to another theme that this module did
+ * not write came from /theme (or a hand edit), and Claude Code draws that theme now. A change to the live file's
+ * preference is left out: another session's picker can write it, and this session still draws its own theme.
+ */
+async function observe($: EngineInterface): Promise<unknown> {
+  const preference = await currentPreference($)
+  const key = typeof preference === 'string' ? preference : ''
+  if (key !== (await read($, seen))) {
+    await update($, seen, () => key)
+    if (key !== LIVE_PREFERENCE) await update($, live, () => key)
+  }
+  return preference
 }
 
 /** Writes the theme everywhere it shows: Claude Code, Windows Terminal, the shared accent file. */
 async function apply($: EngineInterface, theme: DokiTheme): Promise<string[]> {
   const root = await home($)
   const notes: string[] = []
-  const preference = preferenceOf(theme)
+  await observe($)
 
-  // 1. The Claude Code theme file (hot-reloaded from ~/.claude/themes).
-  const themeFile = `${preference.replace(/^custom:/, '')}.json`
-  const themePath = `${root}/.claude/themes/${themeFile}`
-  const oldTheme = await readOr($, themePath)
-  if (oldTheme !== undefined) await backup($, root, 'theme', themeFile, oldTheme)
-  await $.fs.write(themePath, JSON.stringify(toClaudeTheme(theme), null, 2) + '\n')
-  notes.push(`theme file ${themePath}`)
+  // 1. The theme's own file, so /theme lists it, and the live file, which Claude Code reloads at once when it is
+  // the theme in use: the preference names the live file, so each pick after the first start on it shows at once.
+  const preference = LIVE_PREFERENCE
+  for (const [file, content] of [
+    [`${preferenceOf(theme).replace(/^custom:/, '')}.json`, toClaudeTheme(theme)],
+    [`${LIVE_SLUG}.json`, toLiveTheme(theme)],
+  ] as const) {
+    const path = `${root}/.claude/themes/${file}`
+    const old = await readOr($, path)
+    if (old !== undefined) await backup($, root, 'theme', file, old)
+    await $.fs.write(path, JSON.stringify(content, null, 2) + '\n')
+    notes.push(`theme file ${path}`)
+  }
 
-  // 2. Switch Claude Code to it: the /config row first, then make sure settings.json agrees.
-  // The /config row takes only the built-in themes, so a refusal is expected; settings.json does the switch.
+  // 2. Point Claude Code at the live file: the /config row first, then make sure settings.json agrees.
+  // The /config row changes only through its dialog, so a refusal is expected; settings.json takes effect at the next start.
   try {
     const { deny } = await $.config.set({ key: 'theme', value: preference })
-    if (!deny) notes.push('config.set theme')
+    if (!deny) {
+      notes.push('config.set theme')
+      await update($, live, () => preference)
+    }
   } catch (error) {
     notes.push(`config.set failed (${String(error).slice(0, 80)})`)
   }
@@ -181,6 +216,7 @@ async function apply($: EngineInterface, theme: DokiTheme): Promise<string[]> {
       await $.fs.write(settingsPath, next)
       notes.push('settings.json theme')
     }
+    await update($, seen, () => preference)
   } catch (error) {
     notes.push(`settings.json skipped (${String(error).slice(0, 80)})`)
   }
@@ -190,7 +226,10 @@ async function apply($: EngineInterface, theme: DokiTheme): Promise<string[]> {
 
   await update($, followed, () => theme.slug)
   await update($, current, () => theme.slug)
-  $.ui.toast(`Theme: ${sourceLabel(theme)} ${theme.name}`)
+  // Claude Code still draws another file: it changes to the live file at its next start, not now.
+  const later = (await read($, live)) !== LIVE_PREFERENCE
+  if (later) notes.push('Claude Code changes after a restart')
+  $.ui.toast(`Theme: ${sourceLabel(theme)} ${theme.name}${later ? '. Restart Claude Code one time to see it here.' : ''}`)
   return notes
 }
 
@@ -268,6 +307,11 @@ const openPicker = async ($: EngineInterface) => {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await update($, current, () => '')
+    // Claude Code has read the theme preference before this hook runs (seen in 2.1.302): it draws this one.
+    const preference = await currentPreference($)
+    const key = typeof preference === 'string' ? preference : ''
+    await update($, live, () => key)
+    await update($, seen, () => key)
     const atStart = await currentSlug($)
     await update($, followed, was => was || atStart)
     await $.command.register({
@@ -294,7 +338,7 @@ export const register: Register = on => {
   // A slash command another plugin answers may not reach this hook; the next typed prompt does.
   on('prompt.submit', async ($, e, next) => {
     try {
-      await follow($, await currentPreference($))
+      await follow($, await observe($))
     } catch {
       // Never block a prompt over a theme.
     }
