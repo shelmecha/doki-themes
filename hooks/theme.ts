@@ -149,7 +149,33 @@ export const sourceLabel = (theme: DokiTheme): string => (theme.source === 'term
 /** The Claude Code theme preference for a theme: custom:doki-ram, custom:termcn-dracula. */
 export const preferenceOf = (theme: DokiTheme): string => (theme.source === 'termcn' ? `custom:${theme.slug}` : `custom:doki-${theme.slug}`)
 
+/**
+ * The one theme file the picker rewrites at each pick (~/.claude/themes/doki-theme-picker.json) and the preference
+ * that names it. Claude Code reads the theme preference only at start or from /theme, but it reloads a custom theme
+ * file when the file changes (seen in 2.1.302): a preference that always names this file shows each pick at once.
+ */
+export const LIVE_SLUG = 'doki-theme-picker'
+export const LIVE_PREFERENCE = `custom:${LIVE_SLUG}`
+
+/** The name /theme shows for the live file: the theme's own name with " (picker)". */
+const liveName = (theme: DokiTheme): string => `${sourceLabel(theme)} ${theme.name} (picker)`
+
 export type ClaudeTheme = { name: string; base: 'dark-daltonized' | 'light-daltonized'; overrides: Record<string, string> }
+
+/** The live file's copy of a theme: the same colors as its own file, a name that tells the two apart in /theme. */
+export function toLiveTheme(theme: DokiTheme): ClaudeTheme {
+  return { ...toClaudeTheme(theme), name: liveName(theme) }
+}
+
+/** The slug of the theme the live file holds, by its name; "" when the text is not a live file of a known theme. */
+export function slugOfLiveTheme(text: string | undefined, themes: readonly DokiTheme[] = THEMES): string {
+  try {
+    const name = (JSON.parse(text ?? '') as { name?: unknown }).name
+    return themes.find(t => liveName(t) === name)?.slug ?? ''
+  } catch {
+    return ''
+  }
+}
 
 /** The same tokens ~/.claude/themes/doki-ram.json sets, sourced from the theme's own colors. */
 export function toClaudeTheme(theme: DokiTheme): ClaudeTheme {
@@ -283,9 +309,12 @@ export function findTheme(query: string, themes: readonly DokiTheme[] = THEMES):
   )
 }
 
-/** The slug in a theme preference ("custom:doki-ram" -> "ram", "custom:termcn-nord" -> "termcn-nord"), or "" for a built-in theme. */
+/**
+ * The slug in a theme preference ("custom:doki-ram" -> "ram", "custom:termcn-nord" -> "termcn-nord"), or "" for a
+ * built-in theme and for the live file (its theme is in the file: slugOfLiveTheme).
+ */
 export function slugOfPreference(preference: unknown): string {
-  if (typeof preference !== 'string') return ''
+  if (typeof preference !== 'string' || preference === LIVE_PREFERENCE) return ''
   if (preference.startsWith('custom:doki-')) return preference.slice('custom:doki-'.length)
   return preference.startsWith('custom:termcn-') ? preference.slice('custom:'.length) : ''
 }

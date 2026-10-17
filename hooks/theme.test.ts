@@ -2,6 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import {
   LIGHT_SUBTLE_CONTRAST,
+  LIVE_PREFERENCE,
   PROTECTED_TOKEN,
   RAM_ACCENT,
   ROLE_CONTRAST,
@@ -17,10 +18,12 @@ import {
   preferenceOf,
   parseAccent,
   readableOn,
+  slugOfLiveTheme,
   slugOfPreference,
   swatchCells,
   toAccent,
   toClaudeTheme,
+  toLiveTheme,
   toTermcnTheme,
   toWtScheme,
   updateClaudeSettings,
@@ -323,6 +326,25 @@ test('termcn slug and preference round-trip, and findTheme finds termcn names', 
   expect(findTheme('nord')?.slug).toBe('termcn-nord')
   expect(findTheme('ram')?.slug).toBe('ram')
   expect(new Set(TERMCN_RAW.map(r => `termcn-${r.slug}`)).size).toBe(TERMCN_RAW.length)
+})
+
+test('the live file holds the same colors, and its name finds the theme again', async () => {
+  expect(LIVE_PREFERENCE).toBe('custom:doki-theme-picker')
+  // The live preference is not a theme slug: "theme-picker" must not reach findTheme.
+  expect(slugOfPreference(LIVE_PREFERENCE)).toBe('')
+  for (const theme of ALL_THEMES) {
+    const own = toClaudeTheme(theme)
+    const live = toLiveTheme(theme)
+    expect(live.name).toBe(`${own.name} (picker)`)
+    expect(live.base).toBe(own.base)
+    expect(live.overrides).toEqual(own.overrides)
+    expect(slugOfLiveTheme(JSON.stringify(live, null, 2) + '\n')).toBe(theme.slug)
+  }
+  // Each name is used once, so the name in the live file names one theme.
+  expect(new Set(ALL_THEMES.map(t => toLiveTheme(t).name)).size).toBe(ALL_THEMES.length)
+  expect(slugOfLiveTheme(undefined)).toBe('')
+  expect(slugOfLiveTheme('{bad json')).toBe('')
+  expect(slugOfLiveTheme(JSON.stringify(toClaudeTheme(findTheme('ram')!)))).toBe('')
 })
 
 test('list groups Doki first, then termcn, each dark before light', async () => {
