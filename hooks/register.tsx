@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, RenderElement, RenderNode } from 'claude-code'
 
 import type { DokiTheme } from '../types'
 import {
@@ -23,6 +23,8 @@ import {
   updateWtSettings,
   windowStart,
 } from './theme'
+import { splitBoxes, splitReply } from './labels'
+import type { Piece } from './labels'
 
 const PANE = 'doki-theme-picker'
 const COMMAND = 'doki-theme-picker'
@@ -43,6 +45,32 @@ const followed = atom({ plugin: 'doki-theme-picker', key: 'followed' } as const,
 const live = atom({ plugin: 'doki-theme-picker', key: 'live' } as const, '')
 // The preference settings.json held when this module last read or wrote it: a change it did not make is /theme's.
 const seen = atom({ plugin: 'doki-theme-picker', key: 'seen' } as const, '')
+
+// A reply label's place on the engine's row: one blank row above the text, and the
+// text two cells in after the reply bullet (none on a later block).
+const LABEL_TOP = 1
+const LABEL_INDENT = 2
+// A category bullet's words ("- Done (2026-10-17)" draws DONE): the H2 tier under the labels.
+// The color is a theme key, so each theme draws it in its own color: 'suggestion' is the theme's
+// interface color (cream #F6E9CB in Natsuki Dark), apart from the labels' 'claude' accent.
+const HEADING_COLOR = 'suggestion'
+const HEADING_UNDERLINE = true
+const HEADING_CAPS = true
+// A dash item with the H2 look reads as a heading line: its "- " mark is painted blank.
+// A numbered item keeps its number.
+const HEADING_HIDE_DASH = true
+// The words start after the engine's "- " list mark, two cells.
+const HEADING_INDENT = 2
+// A callout block (`★ FYI ───` … `───`) is drawn in a box: the 'single' border of Ink's Box, as in
+// the mods gallery's BOX BORDERS sample. The border takes the theme's quiet 'subtle' color; the
+// title on the top border takes the HEADING_COLOR, bold.
+const BOX_STYLE = 'single'
+const BOX_COLOR = 'subtle'
+const BOX_TITLE_COLOR = HEADING_COLOR
+// The title starts this many cells into the top border: past the corner and one rule cell.
+const BOX_TITLE_LEFT = 2
+// The reply bullet a callout block draws when it opens the reply.
+const BULLET = '●'
 
 const LIST = ordered()
 // The rows the list draws, group headers included: what the window slides over.
@@ -512,8 +540,95 @@ export const register: Register = on => {
               />
             </Box>
           )
-        })}
+        })
+}
       </Box>
     )
+  })
+
+  // Capital label or heading words (FYI:, WAITS ON SHELVI) that open a paragraph: bold in the theme's Claude color.
+  // Category words that open a top-level bullet (- Done): underlined capitals in the HEADING_COLOR.
+  // A callout block (`★ FYI ───` … `───`): a box with a single border, its title on the top border.
+  on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
+    try {
+      // Cell offsets fit the terminal alone; a summary row keeps its mark.
+      if (e.surface !== 'terminal' || e.props.isSummary) return next(e)
+      const { Box, Markdown, Text } = $.ui.resolve(e)
+
+      // The overlays of a piece: its label or heading words, and a blank over its dash.
+      const marks = (piece: Piece, top: number, left: number): RenderNode[] => {
+        const mark = piece.label
+          ? Box({ position: 'absolute', top, left, children: [Text({ color: 'claude', weight: 'bold', children: [piece.label] })] })
+          : piece.heading
+            ? Box({ position: 'absolute', top, left: left + (piece.bare ? 0 : HEADING_INDENT) + (piece.headingAt ?? 0), children: [Text({ color: HEADING_COLOR, underline: HEADING_UNDERLINE, children: [HEADING_CAPS ? piece.heading.toUpperCase() : piece.heading] })] })
+            : undefined
+        if (!mark) return []
+        // A space over the dash cell: the engine's "-" shows blank, the cells around it stay.
+        const blank = piece.heading && HEADING_HIDE_DASH && piece.text.startsWith('- ')
+          ? Box({ position: 'absolute', top, left, children: [Text({ children: [' '] })] })
+          : undefined
+        return blank ? [blank, mark] : [mark]
+      }
+
+      // Text with no callout block: engine blocks, split where a label or heading opens a piece.
+      const drawText = async (text: string, first: boolean): Promise<RenderElement> => {
+        const whole = text === e.props.text && first === e.props.isFirstOfReply
+        const props = { ...e.props, text, isFirstOfReply: first }
+        const pieces = splitReply(text)
+        if (!pieces) return next(whole ? e : { ...e, props })
+        const left = first ? LABEL_INDENT : 0
+        const rows: RenderNode[] = []
+        for (const [i, piece] of pieces.entries()) {
+          const same = whole && pieces.length === 1 && text.startsWith(piece.text)
+          // A tight piece goes on from the row above with no blank row, so it is drawn as the
+          // reply's markdown alone; any other piece is an engine block, a blank row above it.
+          const row = piece.tight
+            ? Markdown({ text: piece.text })
+            : await next(same ? e : { ...e, props: { ...props, text: piece.text, isFirstOfReply: first && i === 0 } })
+          // A later piece has no bullet, so it keeps the first piece's indent itself; a piece under
+          // a numbered heading moves right to its title.
+          const pad = (i > 0 ? left : 0) + (piece.under ?? 0)
+          const body = pad ? Box({ flexDirection: 'column', paddingLeft: pad, children: [row] }) : row
+          // The engine still draws the words; the overlay repaints the same cells.
+          const over = marks(piece, piece.tight ? 0 : LABEL_TOP, left + (piece.under ?? 0))
+          rows.push(over.length ? Box({ flexDirection: 'column', children: [body, ...over] }) : body)
+        }
+        return Box({ flexDirection: 'column', children: rows })
+      }
+
+      // A callout block: its lines as markdown inside the border, wrapped to the box width.
+      const drawBox = (title: string, text: string, first: boolean): RenderElement => {
+        const pieces: Piece[] = text ? (splitReply(text) ?? [{ text }]) : []
+        const inner = pieces.map((piece, j) =>
+          Box({ flexDirection: 'column', marginTop: j > 0 && !piece.tight ? 1 : 0, paddingLeft: piece.under ?? 0, children: [Markdown({ text: piece.text }), ...marks(piece, 0, piece.under ?? 0)] }),
+        )
+        const frame = Box({
+          flexDirection: 'column',
+          borderStyle: BOX_STYLE,
+          borderColor: BOX_COLOR,
+          paddingX: 1,
+          children: inner.length ? inner : [Text({ children: [' '] })],
+        })
+        const name = Box({ position: 'absolute', top: 0, left: BOX_TITLE_LEFT, children: [Text({ color: BOX_TITLE_COLOR, weight: 'bold', children: [` ★ ${title} `] })] })
+        const box = Box({ flexDirection: 'column', children: [frame, name] })
+        // The first block of a reply keeps its bullet, on the top border row.
+        const bullet = first ? [Box({ position: 'absolute', top: 0, left: 0, children: [Text({ children: [BULLET] })] })] : []
+        return Box({ flexDirection: 'column', marginTop: LABEL_TOP, paddingLeft: first ? LABEL_INDENT : 0, children: [box, ...bullet] })
+      }
+
+      const segments = splitBoxes(e.props.text)
+      if (!segments) return await drawText(e.props.text, e.props.isFirstOfReply)
+      const left = e.props.isFirstOfReply ? LABEL_INDENT : 0
+      const rows: RenderNode[] = []
+      for (const [i, segment] of segments.entries()) {
+        const first = e.props.isFirstOfReply && i === 0
+        const row = segment.kind === 'box' ? drawBox(segment.title, segment.text, first) : await drawText(segment.text, first)
+        // A later segment has no bullet, so it keeps the first segment's indent itself.
+        rows.push(i > 0 && left ? Box({ flexDirection: 'column', paddingLeft: left, children: [row] }) : row)
+      }
+      return Box({ flexDirection: 'column', children: rows })
+    } catch {
+      return next(e)
+    }
   })
 }
