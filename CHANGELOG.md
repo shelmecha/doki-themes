@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.7 (2026-10-22)
+
+- The status line can now change color at once in every open Claude Code window. Add `--theme <any-name>` to your `statusLine` command in `settings.json`, for example `node statusline.mjs --theme doki-ram`. At each pick, the picker sets that name to the picked theme (for example `doki-vanilla`), and Claude Code runs the status line again because its command changed. Your script must ignore the argument.
+- The picker changes only the `--theme` name in that command and nothing else in `settings.json`. It reads the file again just before it writes, and it backs up the file to `backups\settings\claude\` first. A command without `--theme` is not changed.
+
 ## 0.2.6 (2026-10-18)
 
 - Claude Code now shows the theme you pick at once. Before, the picker changed Windows Terminal at once, but Claude Code kept the old theme until you used `/theme` or started Claude Code again. Claude Code reads the theme in `settings.json` only when it starts and from `/theme`, but it reads a theme file again when the file changes.

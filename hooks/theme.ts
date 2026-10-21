@@ -381,6 +381,53 @@ export function updateClaudeSettings(text: string, preference: string): string {
   return matchStyle(text, JSON.stringify(settings, null, 2))
 }
 
+/** The theme's name for the status line's `--theme` argument: lower-case letters, digits and dashes only. */
+export const statusLineSlug = (theme: DokiTheme): string =>
+  preferenceOf(theme)
+    .replace(/^custom:/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+// The `--theme <name>` (or `--theme=<name>`) argument in a status line command.
+const THEME_ARG = /(\s--theme(?:\s+|=))(\S*)/
+
+/**
+ * Sets the `--theme` argument of the statusLine command in Claude Code's settings.json text. Claude Code runs the
+ * status line again when its command changes, so every open session redraws it with the new accent at once.
+ * Only a command that already has `--theme` is changed: the argument is the person's opt-in, and their script
+ * must ignore it. Edits the command string in place and nothing else. Returns undefined when nothing changes,
+ * the text is not JSON, or the in-place edit cannot be made.
+ */
+export function updateStatusLineTheme(text: string, slug: string): string | undefined {
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) return undefined
+  let settings: { statusLine?: { command?: unknown } }
+  try {
+    settings = JSON.parse(text) as typeof settings
+  } catch {
+    return undefined
+  }
+  const command = settings?.statusLine?.command
+  if (typeof command !== 'string' || !THEME_ARG.test(command)) return undefined
+  const next = command.replace(THEME_ARG, (_all, head: string) => `${head}${slug}`)
+  if (next === command) return undefined
+  const key = text.search(/"statusLine"\s*:\s*\{/)
+  const old = JSON.stringify(command)
+  const at = key < 0 ? -1 : text.indexOf(old, key)
+  if (at < 0) return undefined
+  const edited = text.slice(0, at) + JSON.stringify(next) + text.slice(at + old.length)
+  // The edit must change statusLine.command and nothing else.
+  try {
+    const parsed = JSON.parse(edited) as { statusLine: { command: unknown } }
+    if (parsed.statusLine.command !== next) return undefined
+    parsed.statusLine.command = command
+    if (JSON.stringify(parsed) !== JSON.stringify(settings)) return undefined
+  } catch {
+    return undefined
+  }
+  return edited
+}
+
 /**
  * A Raster strip of the theme's colors: row 1 the UI colors, row 2 the terminal colors.
  * Each swatch is `width` full-block cells in that color.

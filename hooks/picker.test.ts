@@ -169,6 +169,29 @@ test('the picker pane validates on terminal, previews the ring, and Enter applie
   await ui.unmount()
 })
 
+test('a pick sets the status line --theme argument so every session redraws it; no argument, no change', async ($, on) => {
+  const { files } = world(on)
+  const command = 'node C:/home/.claude/statusline-usage.mjs'
+  const settings = (statusLine: string) =>
+    JSON.stringify({ env: { A: '1' }, statusLine: { type: 'command', command: statusLine, padding: 0 }, theme: LIVE }, null, 2) + '\n'
+  files.set(SETTINGS, settings(`${command} --theme doki-ram`))
+  await $.session.start(START)
+  const done = await $.command.run({ ...RUN, args: 'vanilla' })
+  expect(done.text).toContain('status line theme')
+  // Only the argument changed: the rest of the file is byte for byte the same.
+  expect(files.get(SETTINGS)).toBe(settings(`${command} --theme doki-vanilla`))
+  // The same theme again: settings.json is not written.
+  const backups = [...files.keys()].filter(k => k.includes(norm('/backups/settings/claude/'))).length
+  await $.command.run({ ...RUN, args: 'vanilla' })
+  expect([...files.keys()].filter(k => k.includes(norm('/backups/settings/claude/'))).length).toBe(backups)
+
+  // A status line without --theme is left alone.
+  files.set(SETTINGS, settings(command))
+  const other = await $.command.run({ ...RUN, args: 'rem' })
+  expect(other.text).not.toContain('status line')
+  expect(files.get(SETTINGS)).toBe(settings(command))
+})
+
 test('a fresh home: the tab Windows Terminal profile gets the scheme, and no mods folder is made', async ($, on) => {
   const { files } = world(on, { WT_PROFILE_ID: '{574E775E-4F2A-5B96-AC1E-A2962A402336}' })
   files.delete(norm(`${HOME}/.claude/mods/other-mod/hooks.json`))

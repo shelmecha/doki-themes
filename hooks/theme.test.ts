@@ -26,7 +26,9 @@ import {
   toLiveTheme,
   toTermcnTheme,
   toWtScheme,
+  statusLineSlug,
   updateClaudeSettings,
+  updateStatusLineTheme,
   updateWtSettings,
   windowStart,
 } from './theme'
@@ -269,6 +271,29 @@ test('settings.json keeps its CRLF and gets a one-line diff', async () => {
   const compact = '{"a":1}\r\n'
   expect(updateClaudeSettings(compact, 'custom:doki-ram')).toBe('{\r\n  "a": 1,\r\n  "theme": "custom:doki-ram"\r\n}\r\n')
   expect(matchStyle('{\n}', '{\n  "a": 1\n}\n')).toBe('{\n  "a": 1\n}')
+})
+
+test('status line slug: the preference name in safe characters', async () => {
+  expect(statusLineSlug(findTheme('ram')!)).toBe('doki-ram')
+  for (const theme of ordered()) expect(statusLineSlug(theme)).toMatch(/^[a-z0-9][a-z0-9-]*$/)
+})
+
+test('status line --theme: only that argument changes, in place, and only when the command has one', async () => {
+  const cmd = 'node C:/x/statusline-usage.mjs'
+  const before = `{\r\n  "hooks": { "Stop": [{ "command": "${cmd} --theme doki-ram" }] },\r\n  "statusLine": {\r\n    "type": "command",\r\n    "command": "${cmd} --theme doki-ram",\r\n    "padding": 0\r\n  },\r\n  "theme": "custom:doki-theme-picker"\r\n}\r\n`
+  const after = updateStatusLineTheme(before, 'doki-vanilla')
+  // One line changes; the same text in another key, CRLF and the final newline stay.
+  expect(after).toBe(before.replace(`"command": "${cmd} --theme doki-ram",`, `"command": "${cmd} --theme doki-vanilla",`))
+  expect(JSON.parse(after!).hooks.Stop[0].command).toBe(`${cmd} --theme doki-ram`)
+  // Same theme: no write.
+  expect(updateStatusLineTheme(after!, 'doki-vanilla')).toBeUndefined()
+  // `--theme=name` form.
+  expect(JSON.parse(updateStatusLineTheme(`{"statusLine":{"command":"${cmd} --theme=a"}}`, 'b')!).statusLine.command).toBe(`${cmd} --theme=b`)
+  // No --theme argument, no statusLine, not JSON, an unsafe slug: nothing changes.
+  expect(updateStatusLineTheme(`{"statusLine":{"type":"command","command":"${cmd}"}}`, 'doki-vanilla')).toBeUndefined()
+  expect(updateStatusLineTheme('{"theme":"x"}', 'doki-vanilla')).toBeUndefined()
+  expect(updateStatusLineTheme('{ not json', 'doki-vanilla')).toBeUndefined()
+  expect(updateStatusLineTheme(before, 'a; rm -rf')).toBeUndefined()
 })
 
 test('swatch strip is a valid 2-row raster', async () => {

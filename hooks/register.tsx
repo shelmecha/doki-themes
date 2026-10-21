@@ -12,12 +12,14 @@ import {
   slugOfPreference,
   sourceLabel,
   stamp,
+  statusLineSlug,
   swatchCells,
   toAccent,
   toClaudeTheme,
   toLiveTheme,
   toWtScheme,
   updateClaudeSettings,
+  updateStatusLineTheme,
   updateWtSettings,
   windowStart,
 } from './theme'
@@ -270,7 +272,32 @@ async function applyOutside($: EngineInterface, root: string, theme: DokiTheme):
   } catch (error) {
     notes.push(`accent file skipped (${String(error).slice(0, 80)})`)
   }
+
+  // 5. The status line: a new `--theme` argument makes every open session run it again with the new accent.
+  notes.push(...(await redrawStatusLine($, root, theme)))
   return notes
+}
+
+/**
+ * Sets the `--theme` argument of the statusLine command in settings.json, when the command has one.
+ * Reads the file again just before the write, so a change another session or Claude Code made meanwhile is kept.
+ */
+async function redrawStatusLine($: EngineInterface, root: string, theme: DokiTheme): Promise<string[]> {
+  const path = `${root}/.claude/settings.json`
+  const slug = statusLineSlug(theme)
+  try {
+    const text = await readOr($, path)
+    if (text === undefined || updateStatusLineTheme(text, slug) === undefined) return []
+    await backup($, root, 'claudeSettings', 'settings.json', text)
+    const fresh = await readOr($, path)
+    const next = fresh === undefined ? undefined : updateStatusLineTheme(fresh, slug)
+    if (fresh === undefined || next === undefined) return []
+    if (fresh !== text) await backup($, root, 'claudeSettings', 'settings.json', fresh)
+    await $.fs.write(path, next)
+    return ['status line theme']
+  } catch (error) {
+    return [`status line skipped (${String(error).slice(0, 80)})`]
+  }
 }
 
 /**
