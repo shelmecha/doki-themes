@@ -56,9 +56,11 @@ const LABEL_INDENT = 2
 const HEADING_COLOR = 'suggestion'
 const HEADING_UNDERLINE = true
 const HEADING_CAPS = true
-// A dash item with the H2 look reads as a heading line: its "- " mark is painted blank.
-// A numbered item keeps its number.
+// A dash item with the H2 look reads as a heading line: its "-" mark is painted over with
+// HEADING_DASH, one cell. A numbered item keeps its number.
 const HEADING_HIDE_DASH = true
+// The mark painted over the dash: Nerd Font oct-dot_fill (U+F444). ' ' paints it blank.
+const HEADING_DASH = '\uF444'
 // The words start after the engine's "- " list mark, two cells.
 const HEADING_INDENT = 2
 // A callout block (`★ FYI ───` … `───`) is drawn in a box: the 'single' border of Ink's Box, as in
@@ -563,11 +565,11 @@ export const register: Register = on => {
             ? Box({ position: 'absolute', top, left: left + (piece.bare ? 0 : HEADING_INDENT) + (piece.headingAt ?? 0), children: [Text({ color: HEADING_COLOR, underline: HEADING_UNDERLINE, children: [HEADING_CAPS ? piece.heading.toUpperCase() : piece.heading] })] })
             : undefined
         if (!mark) return []
-        // A space over the dash cell: the engine's "-" shows blank, the cells around it stay.
-        const blank = piece.heading && HEADING_HIDE_DASH && piece.text.startsWith('- ')
-          ? Box({ position: 'absolute', top, left, children: [Text({ children: [' '] })] })
+        // The dot over the dash cell: the engine's "-" is hidden, the cells around it stay.
+        const dot = piece.heading && HEADING_HIDE_DASH && piece.text.startsWith('- ')
+          ? Box({ position: 'absolute', top, left, children: [Text({ children: [HEADING_DASH] })] })
           : undefined
-        return blank ? [blank, mark] : [mark]
+        return dot ? [dot, mark] : [mark]
       }
 
       // Text with no callout block: engine blocks, split where a label or heading opens a piece.

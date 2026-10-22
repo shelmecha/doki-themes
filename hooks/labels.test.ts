@@ -466,12 +466,13 @@ test('the live reply shape: intros, a category with nested items, under a headin
   await ui.unmount()
 })
 
-// A dash item with the H2 look shows no dash: a space is painted over the dash cell.
+// A dash item with the H2 look shows the oct-dot_fill glyph (U+F444) over the dash cell.
+const DOT = '\uF444'
 const overlays = async (ui: Awaited<ReturnType<typeof mount>>['ui']) =>
   (await ui.findAll({ type: 'Box' }))
     .filter(b => b.props.position === 'absolute')
     .map(b => [b.props.top, b.props.left, b.text])
-test('the dash of an H2 dash item is painted blank; numbered items and labels keep theirs', async ($, on) => {
+test('the dash of an H2 dash item is painted as the dot glyph; numbered items and labels keep theirs', async ($, on) => {
   const text = [
     '## DONE:',
     '',
@@ -492,21 +493,29 @@ test('the dash of an H2 dash item is painted blank; numbered items and labels ke
   const { ui } = await mount($, on, { text, isFirstOfReply: true })
   expect(await overlays(ui)).toEqual([
     [1, 2, 'DONE:'],
-    [1, 2, ' '],
+    [1, 2, DOT],
     [1, 4, 'COMMIT'],
-    [0, 2, ' '],
+    [0, 2, DOT],
     [0, 4, 'SECRET SCAN'],
-    [0, 2, ' '],
+    [0, 2, DOT],
     [0, 4, 'DONE'],
-    [0, 2, ' '],
+    [0, 2, DOT],
     [0, 4, 'FYI'],
     [0, 5, 'RESULT'],
   ])
   await ui.unmount()
 })
-test('a bold item whose stars are drawn keeps its word after them, the dash blank', async ($, on) => {
+test('a bold item whose stars are drawn keeps its word after them, the dot on the dash', async ($, on) => {
   const { ui } = await mount($, on, { text: 'Intro.\n\n- **Commit:', isFirstOfReply: true })
-  expect(await overlays(ui)).toEqual([[1, 2, ' '], [1, 6, 'COMMIT']])
+  expect(await overlays(ui)).toEqual([[1, 2, DOT], [1, 6, 'COMMIT']])
+  await ui.unmount()
+})
+// The engine's markdown draws a plain or nested item's "-"; no overlay reaches a row inside a block.
+test('plain and nested items, and dash items in a fence, get no dot', async ($, on) => {
+  const text = ['- Done: x', '  - Renewable 71452', '- plain item', '', '```', '- Done: in a fence', '```'].join('\n')
+  const { ui } = await mount($, on, { text, isFirstOfReply: true })
+  expect((await overlays(ui)).filter(o => o[2] === DOT)).toEqual([[1, 2, DOT]])
+  expect((await ui.findAll({ type: 'Markdown' })).map(m => m.text)).toEqual([text])
   await ui.unmount()
 })
 
@@ -696,14 +705,7 @@ test('a numbered Markdown heading keeps its number plain, whatever the title len
   expect(splitReply('## 4. OPEN FOR YOU')).toBeUndefined()
 })
 test('the lines under a numbered heading start under its title, up to the next heading or label', () => {
-  expect(splitReply('## 1. Google Ads
-- Build: paused
-- Link: live
-
-## 2. Tracking
-- Gtm: v25
-
-NEXT: go')).toEqual([
+  expect(splitReply('## 1. Google Ads\n- Build: paused\n- Link: live\n\n## 2. Tracking\n- Gtm: v25\n\nNEXT: go')).toEqual([
     { text: '## 1. Google Ads', heading: 'Google Ads', headingAt: 3, bare: true },
     { text: '- Build: paused', heading: 'Build', under: 3, tight: true },
     { text: '- Link: live', heading: 'Link', under: 3, tight: true },
@@ -711,9 +713,6 @@ NEXT: go')).toEqual([
     { text: '- Gtm: v25', heading: 'Gtm', under: 3, tight: true },
     { text: 'NEXT: go', label: 'NEXT:' },
   ])
-  expect(splitReply('## 1. Plans
-plain line
-- Done: x')?.[1]).toEqual({ text: 'plain line', under: 3, tight: true })
-  expect(splitReply('## Done
-- Build: x')?.[1]?.under).toBeUndefined()
+  expect(splitReply('## 1. Plans\nplain line\n- Done: x')?.[1]).toEqual({ text: 'plain line', under: 3, tight: true })
+  expect(splitReply('## Done\n- Build: x')?.[1]?.under).toBeUndefined()
 })
