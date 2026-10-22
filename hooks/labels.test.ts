@@ -169,8 +169,21 @@ test('a dated or bracketed category bullet keeps its nested bullets in its piece
   ])
   for (const rest of [' (x)', ' [x]', ' - x', ' \u2013 x', ' \u2014 x', ' 2026-10-17', ': x', ':']) expect(heads(`- Later${rest}`)).toEqual(['Later'])
 })
-test('text before a category bullet is its own piece, and the bullet follows it tight', () => {
-  expect(splitReply('An intro line.\n- FYI\n  - note')).toEqual([{ text: 'An intro line.' }, { text: '- FYI\n  - note', heading: 'FYI', tight: true }])
+test('text before a category bullet is its own piece; under a plain paragraph the bullet gets a blank row', () => {
+  expect(splitReply('An intro line.\n- FYI\n  - note')).toEqual([{ text: 'An intro line.' }, { text: '- FYI\n  - note', heading: 'FYI' }])
+  expect(splitReply('ChatGPT builds the code\nbefore any real form submit.\n- Decide: write the blog\n- FYI: x')).toEqual([
+    { text: 'ChatGPT builds the code\nbefore any real form submit.' },
+    { text: '- Decide: write the blog', heading: 'Decide' },
+    { text: '- FYI: x', heading: 'FYI', tight: true },
+  ])
+  // A label or group heading right above keeps the bullet tight, as does a list, quote or table.
+  expect(splitReply('NEXT: run it\nmore words\n- Later')?.at(-1)).toEqual({ text: '- Later', heading: 'Later', tight: true })
+  expect(splitReply('**Done recently**\n- Checked: x')?.at(-1)).toEqual({ text: '- Checked: x', heading: 'Checked', tight: true })
+  expect(splitReply('- a\nlazy line\n- Later')?.at(-1)).toEqual({ text: '- Later', heading: 'Later', tight: true })
+  expect(splitReply('> quote\n- Later')?.at(-1)).toEqual({ text: '- Later', heading: 'Later', tight: true })
+  expect(splitReply('| a | b |\n|---|---|\n- Later')?.at(-1)).toEqual({ text: '- Later', heading: 'Later', tight: true })
+  // A heading or fence above ends its block: the plain line under it is the paragraph.
+  expect(splitReply('```\ncode\n```\nPlain line.\n- Later')?.at(-1)).toEqual({ text: '- Later', heading: 'Later' })
   expect(splitReply('Intro.\n\n- Undone')).toEqual([{ text: 'Intro.' }, { text: '- Undone', heading: 'Undone' }])
   // A blank line inside a list draws no blank row, so the bullet after it is tight too.
   expect(splitReply('- Undone\n  - one\n\n- FYI\n  - two')).toEqual([{ text: '- Undone\n  - one', heading: 'Undone' }, { text: '- FYI\n  - two', heading: 'FYI', tight: true }])
@@ -312,7 +325,8 @@ test('a top-level numbered item opens a category piece, numbered as the engine d
   expect(splitReply(`${items(9)}\n10. **Open checks**`)?.at(-1)).toEqual({ text: '10. **Open checks**', heading: 'Open checks', headingAt: 2, tight: true })
   expect(splitReply('1. **Done (2026-10-17)**')).toEqual([{ text: '1. **Done (2026-10-17)**', heading: 'Done', headingAt: 1 }])
   expect(splitReply('Intro.\n\n7. Done\n8. FYI')).toEqual([{ text: 'Intro.' }, { text: '7. Done', heading: 'Done', headingAt: 1 }, { text: '8. FYI', heading: 'FYI', headingAt: 1, tight: true }])
-  expect(splitReply('Intro.\n1. Done')).toEqual([{ text: 'Intro.' }, { text: '1. Done', heading: 'Done', headingAt: 1, tight: true }])
+  // Under a plain paragraph the first item gets a blank row; the next item stays tight.
+  expect(splitReply('Intro.\n1. Done\n2. FYI')).toEqual([{ text: 'Intro.' }, { text: '1. Done', heading: 'Done', headingAt: 1 }, { text: '2. FYI', heading: 'FYI', headingAt: 1, tight: true }])
   // A loose list: the item after a blank line is still the same list, with no blank row.
   expect(splitReply('1. Approve\n\n2. Done')).toEqual([{ text: '1. Approve' }, { text: '2. Done', heading: 'Done', headingAt: 1, tight: true }])
   // An item indented less than the item text is a sibling, so it counts.
@@ -715,4 +729,14 @@ test('the lines under a numbered heading start under its title, up to the next h
   ])
   expect(splitReply('## 1. Plans\nplain line\n- Done: x')?.[1]).toEqual({ text: 'plain line', under: 3, tight: true })
   expect(splitReply('## Done\n- Build: x')?.[1]?.under).toBeUndefined()
+})
+test('a category bullet right under a plain paragraph is drawn as an engine block, a blank row above it', async ($, on) => {
+  const text = 'ChatGPT builds the code before any real form submit.\n- Decide: write the new blog\n- FYI: later'
+  const { ui, seen } = await mount($, on, { text, isFirstOfReply: true })
+  expect(seen.map(p => [p.text, p.isFirstOfReply])).toEqual([
+    ['ChatGPT builds the code before any real form submit.', true],
+    ['- Decide: write the new blog', false],
+  ])
+  expect(await overlays(ui)).toEqual([[1, 2, DOT], [1, 4, 'DECIDE'], [0, 2, DOT], [0, 4, 'FYI']])
+  await ui.unmount()
 })

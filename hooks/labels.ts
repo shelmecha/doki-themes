@@ -153,6 +153,28 @@ export function splitReply(text: string, introWords = INTRO_WORDS): Piece[] | un
   return split(text, true, introWords)
 }
 
+// A row of a Markdown table, a list or a quote: no paragraph a category item could follow.
+const NOT_PARAGRAPH = /^ {0,3}[|>]/
+// A line that ends the block above it on its own: a Markdown heading, a rule or a fence.
+const ENDS_BLOCK = /^ {0,3}(?:#{1,6}(?: |$)|(?:[-*_] *){3,}$|`{3,}|~{3,})/
+
+/**
+ * True when a plain paragraph ends on the line above `i`, with no blank line between: a category
+ * item there gets a blank row above it, as after a blank line. The paragraph holds no list,
+ * quote or table line, and no label or group heading opens it: those keep the item tight.
+ */
+function paragraphAbove(lines: string[], i: number, starts: Start[]): boolean {
+  let from = i
+  while (from > 0 && lines[from - 1]!.trim()) {
+    const line = lines[from - 1]!
+    if (ENDS_BLOCK.test(line)) break
+    if (LISTED.test(line) || BLOCK.test(line) || NOT_PARAGRAPH.test(line)) return false
+    from--
+  }
+  if (from === i) return false
+  return !starts.some(s => s.at >= from && s.at < i && (s.label || s.bare))
+}
+
 function split(text: string, headings: boolean, words: number): Piece[] | undefined {
   const lines = text.split('\n')
   const starts: Start[] = []
@@ -208,7 +230,9 @@ function split(text: string, headings: boolean, words: number): Piece[] | undefi
     if (line.startsWith('- ')) {
       const hit = headingOf(line.slice(2), words)
       if (!hit) return
-      const start: Start = { at: i, heading: hit.heading, tight: tight || LISTED.test(lines.slice(0, i).findLast(l => l.trim()) ?? '') }
+      // A category item right under a plain paragraph gets a blank row above it; under a list
+      // item, a label or a group heading it stays tight.
+      const start: Start = { at: i, heading: hit.heading, tight: (tight && !paragraphAbove(lines, i, starts)) || LISTED.test(lines.slice(0, i).findLast(l => l.trim()) ?? '') }
       if (hit.at) start.headingAt = hit.at
       return void starts.push(start)
     }
@@ -217,7 +241,7 @@ function split(text: string, headings: boolean, words: number): Piece[] | undefi
     const hit = headingOf(line.slice(item[0].length), words)
     if (!hit) return
     const shown = String(number)
-    const start: Start = { at: i, heading: hit.heading, headingAt: shown.length + hit.at, tight: tight || continued }
+    const start: Start = { at: i, heading: hit.heading, headingAt: shown.length + hit.at, tight: continued || (tight && !paragraphAbove(lines, i, starts)) }
     if (shown !== item[2]) start.number = shown
     starts.push(start)
   })
