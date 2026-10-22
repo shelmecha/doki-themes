@@ -153,26 +153,32 @@ export function splitReply(text: string, introWords = INTRO_WORDS): Piece[] | un
   return split(text, true, introWords)
 }
 
-// A row of a Markdown table, a list or a quote: no paragraph a category item could follow.
-const NOT_PARAGRAPH = /^ {0,3}[|>]/
+// A list item's mark at any indent ("- ", "  - ", "1. "): its line is no paragraph text.
+const ITEM_MARK = /^\s*(?:[-*+]|\d{1,9}[.)])(?: |$)/
+// A row of a Markdown table or a quote, at any indent: no paragraph a category item could follow.
+const NOT_PARAGRAPH = /^\s*[|>]/
 // A line that ends the block above it on its own: a Markdown heading, a rule or a fence.
-const ENDS_BLOCK = /^ {0,3}(?:#{1,6}(?: |$)|(?:[-*_] *){3,}$|`{3,}|~{3,})/
+const ENDS_BLOCK = /^ {0,3}(?:#{1,6}(?: |$)|(?:[-*_] *){3,}$)|^\s*(?:`{3,}|~{3,})/
 
 /**
- * True when a plain paragraph ends on the line above `i`, with no blank line between: a category
- * item there gets a blank row above it, as after a blank line. The paragraph holds no list,
- * quote or table line, and no label or group heading opens it: those keep the item tight.
+ * True when a paragraph is the last block above line `i` (blank lines between are skipped): a
+ * category item there gets a blank row above it. It may be a plain paragraph, or a paragraph of
+ * the item before, indented under it and set off from the item's first line by a blank line.
+ * Its lines hold no list mark, quote or table row, and no label or group heading opens it:
+ * an item's own lines (wrapped text, nested items), a label or a group heading keep it tight.
  */
 function paragraphAbove(lines: string[], i: number, starts: Start[]): boolean {
-  let from = i
+  let end = i
+  while (end > 0 && !lines[end - 1]!.trim()) end--
+  let from = end
   while (from > 0 && lines[from - 1]!.trim()) {
     const line = lines[from - 1]!
     if (ENDS_BLOCK.test(line)) break
-    if (LISTED.test(line) || BLOCK.test(line) || NOT_PARAGRAPH.test(line)) return false
+    if (ITEM_MARK.test(line) || NOT_PARAGRAPH.test(line)) return false
     from--
   }
-  if (from === i) return false
-  return !starts.some(s => s.at >= from && s.at < i && (s.label || s.bare))
+  if (from === end) return false
+  return !starts.some(s => s.at >= from && s.at < end && (s.label || s.bare))
 }
 
 function split(text: string, headings: boolean, words: number): Piece[] | undefined {
@@ -230,9 +236,10 @@ function split(text: string, headings: boolean, words: number): Piece[] | undefi
     if (line.startsWith('- ')) {
       const hit = headingOf(line.slice(2), words)
       if (!hit) return
-      // A category item right under a plain paragraph gets a blank row above it; under a list
-      // item, a label or a group heading it stays tight.
-      const start: Start = { at: i, heading: hit.heading, tight: (tight && !paragraphAbove(lines, i, starts)) || LISTED.test(lines.slice(0, i).findLast(l => l.trim()) ?? '') }
+      // A category item under a paragraph gets a blank row above it; under an item's own lines,
+      // a label or a group heading it stays tight.
+      const gap = paragraphAbove(lines, i, starts)
+      const start: Start = { at: i, heading: hit.heading, tight: !gap && (tight || LISTED.test(lines.slice(0, i).findLast(l => l.trim()) ?? '')) }
       if (hit.at) start.headingAt = hit.at
       return void starts.push(start)
     }
@@ -241,7 +248,9 @@ function split(text: string, headings: boolean, words: number): Piece[] | undefi
     const hit = headingOf(line.slice(item[0].length), words)
     if (!hit) return
     const shown = String(number)
-    const start: Start = { at: i, heading: hit.heading, headingAt: shown.length + hit.at, tight: continued || (tight && !paragraphAbove(lines, i, starts)) }
+    // The same gap rule as a dash item; the next item of the same list is otherwise tight.
+    const gap = paragraphAbove(lines, i, starts)
+    const start: Start = { at: i, heading: hit.heading, headingAt: shown.length + hit.at, tight: !gap && (tight || continued) }
     if (shown !== item[2]) start.number = shown
     starts.push(start)
   })

@@ -740,3 +740,61 @@ test('a category bullet right under a plain paragraph is drawn as an engine bloc
   expect(await overlays(ui)).toEqual([[1, 2, DOT], [1, 4, 'DECIDE'], [0, 2, DOT], [0, 4, 'FYI']])
   await ui.unmount()
 })
+test('a category bullet after a follow-on paragraph of the item before gets a blank row', () => {
+  const live = [
+    '- Guide section redesign: three cards',
+    '  - Renewable 71452',
+    '  - Second',
+    '',
+    '  ChatGPT builds the code and checks it',
+    '  before any real form submit.',
+    '- Decide: write the new blog',
+    '- Check: the form',
+  ].join('\n')
+  expect(splitReply(live)).toEqual([
+    { text: '- Guide section redesign: three cards\n  - Renewable 71452\n  - Second\n\n  ChatGPT builds the code and checks it\n  before any real form submit.', heading: 'Guide section redesign' },
+    { text: '- Decide: write the new blog', heading: 'Decide' },
+    { text: '- Check: the form', heading: 'Check', tight: true },
+  ])
+  // A blank line between the paragraph and the bullet: still a blank row.
+  expect(splitReply('- Guide: x\n\n  Follow-on line.\n\n- Decide: y')?.at(-1)).toEqual({ text: '- Decide: y', heading: 'Decide' })
+  // An item's own lines stay tight: wrapped text, nested items, a loose list of one-line items.
+  expect(splitReply('- Guide: x\n  wraps on\n- Decide: y')?.at(-1)).toEqual({ text: '- Decide: y', heading: 'Decide', tight: true })
+  expect(splitReply('- Guide: x\n  - nested\n\n- Decide: y')?.at(-1)).toEqual({ text: '- Decide: y', heading: 'Decide', tight: true })
+  expect(splitReply('- Guide: x\n\n- Decide: y')?.at(-1)).toEqual({ text: '- Decide: y', heading: 'Decide', tight: true })
+})
+test('numbered category items follow the same gap and tight rules', () => {
+  expect(splitReply('1. Decide: a\n2. Check: b\n3. Check: c')?.map(p => p.tight ?? false)).toEqual([false, true, true])
+  expect(splitReply('1. Guide: x\n   - nested\n\n   Follow-on paragraph.\n2. Decide: y\n3. Check: z')?.slice(1)).toEqual([
+    { text: '2. Decide: y', heading: 'Decide', headingAt: 1 },
+    { text: '3. Check: z', heading: 'Check', headingAt: 1, tight: true },
+  ])
+  expect(splitReply('Intro paragraph.\n\n1. Decide: y\n2. Check: z')?.slice(1).map(p => p.tight ?? false)).toEqual([false, true])
+  expect(splitReply('1. Guide: x\n   wraps on\n2. Decide: y')?.at(-1)).toEqual({ text: '2. Decide: y', heading: 'Decide', headingAt: 1, tight: true })
+})
+test('the live shape draws the gap; numbered items keep their number and get no dot', async ($, on) => {
+  const text = [
+    '- Guide section redesign: three cards',
+    '  - Renewable 71452',
+    '',
+    '  ChatGPT builds the code before any real form submit.',
+    '- Decide: write the new blog',
+    '',
+    'Then:',
+    '',
+    '1. Decide: pick a date',
+    '2. Check: the form',
+  ].join('\n')
+  const { ui, seen } = await mount($, on, { text, isFirstOfReply: true })
+  expect(seen.map(p => p.text.split('\n')[0])).toEqual(['- Guide section redesign: three cards', '- Decide: write the new blog', '1. Decide: pick a date'])
+  expect(await overlays(ui)).toEqual([
+    [1, 2, DOT],
+    [1, 4, 'GUIDE SECTION REDESIGN'],
+    [1, 2, DOT],
+    [1, 4, 'DECIDE'],
+    [1, 5, 'DECIDE'],
+    [0, 5, 'CHECK'],
+  ])
+  expect((await ui.findAll({ type: 'Markdown' })).map(m => m.text.split('\n')[0])).toContain('2. Check: the form')
+  await ui.unmount()
+})
