@@ -256,6 +256,38 @@ export function toWtScheme(theme: DokiTheme): WtScheme {
   }
 }
 
+// Warp's custom theme file in %APPDATA%\warp\Warp\data\themes: one fixed file that each pick rewrites.
+export const WARP_FILE = 'doki-theme-picker.yaml'
+
+/**
+ * A Warp custom theme (YAML), with the same 16 terminal colors as the Windows Terminal scheme.
+ * The name stays fixed, so the theme picked once in Warp follows every pick.
+ */
+export function toWarpTheme(theme: DokiTheme): string {
+  const s = toWtScheme(theme)
+  const ansi = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
+  const key = (name: string, bright: boolean) => {
+    const base = name === 'magenta' ? 'purple' : name
+    return bright ? `bright${base[0]!.toUpperCase()}${base.slice(1)}` : base
+  }
+  const block = (bright: boolean) => ansi.map(n => `    ${n}: '${s[key(n, bright)]}'`).join('\n')
+  return [
+    `# ${s.name}, written by doki-theme-picker. Each pick rewrites this file.`,
+    `name: Doki Theme Picker`,
+    `accent: '${theme.colors.accent.toUpperCase()}'`,
+    `cursor: '${s.cursorColor}'`,
+    `background: '${s.background}'`,
+    `foreground: '${s.foreground}'`,
+    `details: ${theme.dark ? 'darker' : 'lighter'}`,
+    `terminal_colors:`,
+    `  normal:`,
+    block(false),
+    `  bright:`,
+    block(true),
+    '',
+  ].join('\n')
+}
+
 export function toAccent(theme: DokiTheme): Accent {
   const c = theme.colors
   const ink = (hex: string, min = ROLE_CONTRAST) => inkFor(theme, hex, min)

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.8 (2026-10-27)
+
+- Warp support. When Warp is installed (`%APPDATA%\warp\Warp` exists), each pick writes the theme to `%APPDATA%\warp\Warp\data\themes\doki-theme-picker.yaml`: the same 16 terminal colors as the Windows Terminal scheme, plus background, foreground, cursor and accent. Unverified in Warp itself.
+- In Warp, pick "Doki Theme Picker" one time under Settings > Appearance > Themes. The file keeps that name, so later picks change the same theme. The old file is backed up to `backups\settings\warp\` first.
+
 ## 0.2.7 (2026-10-22)
 
 - The status line can now change color at once in every open Claude Code window. Add `--theme <any-name>` to your `statusLine` command in `settings.json`, for example `node statusline.mjs --theme doki-ram`. At each pick, the picker sets that name to the picked theme (for example `doki-vanilla`), and Claude Code runs the status line again because its command changed. Your script must ignore the argument.

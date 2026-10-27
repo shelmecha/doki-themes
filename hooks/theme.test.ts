@@ -25,6 +25,7 @@ import {
   toClaudeTheme,
   toLiveTheme,
   toTermcnTheme,
+  toWarpTheme,
   toWtScheme,
   statusLineSlug,
   updateClaudeSettings,
@@ -380,4 +381,17 @@ test('list groups Doki first, then termcn, each dark before light', async () => 
   expect(list.slice(firstTermcn).every(t => t.source === 'termcn')).toBe(true)
   const flags = list.slice(firstTermcn).map(t => t.dark)
   expect(flags).toEqual([...flags].sort((a, b) => Number(b) - Number(a)))
+})
+
+test('the Warp theme has a fixed name and the 16 terminal colors of the Windows Terminal scheme', () => {
+  for (const t of [findTheme('ram')!, findTheme('emilia light')!]) {
+    const yaml = toWarpTheme(t)
+    const wt = toWtScheme(t)
+    expect(yaml).toContain('name: Doki Theme Picker\n')
+    expect(yaml).toContain(`background: '${wt.background}'`)
+    expect(yaml).toContain(`details: ${t.dark ? 'darker' : 'lighter'}`)
+    expect(yaml).toContain(`    magenta: '${wt.purple}'`)
+    expect(yaml).toContain(`    white: '${wt.brightWhite}'`)
+    expect(yaml.match(/^ {4}\w+: '#[0-9A-F]{6}'$/gm)).toHaveLength(16)
+  }
 })

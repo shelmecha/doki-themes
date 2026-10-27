@@ -17,10 +17,12 @@ import {
   toAccent,
   toClaudeTheme,
   toLiveTheme,
+  toWarpTheme,
   toWtScheme,
   updateClaudeSettings,
   updateStatusLineTheme,
   updateWtSettings,
+  WARP_FILE,
   windowStart,
 } from './theme'
 import { splitBoxes, splitReply } from './labels'
@@ -159,6 +161,7 @@ async function readOr($: EngineInterface, path: string): Promise<string | undefi
 const BACKUP_SECTIONS = {
   claudeSettings: 'settings/claude',
   wtSettings: 'settings/windows-terminal',
+  warpTheme: 'settings/warp',
   theme: 'themes',
 } as const
 type BackupSection = keyof typeof BACKUP_SECTIONS
@@ -290,6 +293,21 @@ async function applyOutside($: EngineInterface, root: string, theme: DokiTheme):
     }
   } else {
     notes.push('Windows Terminal not found, skipped')
+  }
+
+  // 3b. Warp: one fixed custom theme file. Written only when Warp's folder is there.
+  // Pick "Doki Theme Picker" in Warp's theme picker one time; each pick then rewrites it.
+  const appData = ((await $.env.get('APPDATA')) ?? '').replace(/\\/g, '/')
+  try {
+    if (appData && (await $.fs.exists(`${appData}/warp/Warp`))) {
+      const warpPath = `${appData}/warp/Warp/data/themes/${WARP_FILE}`
+      const old = await readOr($, warpPath)
+      if (old !== undefined) await backup($, root, 'warpTheme', WARP_FILE, old)
+      await $.fs.write(warpPath, toWarpTheme(theme))
+      notes.push('Warp theme')
+    }
+  } catch (error) {
+    notes.push(`Warp skipped (${String(error).slice(0, 80)})`)
   }
 
   // 4. The accent other mods draw with. Written only when ~/.claude/mods already exists, so a
