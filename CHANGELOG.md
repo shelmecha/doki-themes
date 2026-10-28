@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased (2026-10-29)
+
+- Warp changes at once on each pick, with no trip to Settings. Warp does not reload a theme file that changes, so each pick writes `doki-theme-picker-a.yaml` or `-b.yaml` in turn, named "Doki: <theme>", and sets `[appearance.themes]` in `%LOCALAPPDATA%\warp\Warp\config\settings.toml` to that file. settings.toml is backed up to `backups\settings\warp\` first. Tested (104 pass); verified in Warp by Shelvi on 2026-10-29.
+
 ## 0.2.8 (2026-10-27)
 
 - Warp support. When Warp is installed (`%APPDATA%\warp\Warp` exists), each pick writes the theme to `%APPDATA%\warp\Warp\data\themes\doki-theme-picker.yaml`: the same 16 terminal colors as the Windows Terminal scheme, plus background, foreground, cursor and accent. Unverified in Warp itself.

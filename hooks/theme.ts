@@ -256,13 +256,34 @@ export function toWtScheme(theme: DokiTheme): WtScheme {
   }
 }
 
-// Warp's custom theme file in %APPDATA%\warp\Warp\data\themes: one fixed file that each pick rewrites.
-export const WARP_FILE = 'doki-theme-picker.yaml'
+// Warp's custom theme files in %APPDATA%\warp\Warp\data\themes. Warp does not reload a theme file that changes,
+// so each pick writes the other file and points settings.toml at it; Warp reloads settings.toml at once.
+export const WARP_FILES = ['doki-theme-picker-a.yaml', 'doki-theme-picker-b.yaml'] as const
+export const warpThemeName = (theme: DokiTheme) => `Doki: ${theme.name}`
 
-/**
- * A Warp custom theme (YAML), with the same 16 terminal colors as the Windows Terminal scheme.
- * The name stays fixed, so the theme picked once in Warp follows every pick.
- */
+/** The theme file the next pick writes: the one settings.toml does not name now. */
+export function nextWarpFile(settings: string | undefined): (typeof WARP_FILES)[number] {
+  return settings?.includes(`path = "${WARP_FILES[0]}"`) ? WARP_FILES[1] : WARP_FILES[0]
+}
+
+/** Warp's settings.toml with [appearance.themes] set to the custom theme in `file`; other lines stay as they are. */
+export function updateWarpSettings(settings: string | undefined, file: string, name: string): string {
+  const line = `theme = { custom = { name = ${JSON.stringify(name)}, path = ${JSON.stringify(file)} } }`
+  const lines = (settings ?? '').split(/\r?\n/)
+  const start = lines.findIndex(l => l.trim() === '[appearance.themes]')
+  if (start < 0) {
+    const body = (settings ?? '').replace(/\s*$/, '')
+    return `${body}${body ? '\n\n' : ''}[appearance.themes]\nsystem_theme = false\n${line}\n`
+  }
+  let end = lines.findIndex((l, i) => i > start && /^\s*\[/.test(l))
+  if (end < 0) end = lines.length
+  const kept = lines.slice(start + 1, end).filter(l => l.trim() !== '' && !/^\s*(theme|system_theme)\s*=/.test(l))
+  const out = [...lines.slice(0, start + 1), 'system_theme = false', line, ...kept]
+  if (end < lines.length) out.push('')
+  return [...out, ...lines.slice(end)].join('\n')
+}
+
+/** A Warp custom theme (YAML), with the same 16 terminal colors as the Windows Terminal scheme. */
 export function toWarpTheme(theme: DokiTheme): string {
   const s = toWtScheme(theme)
   const ansi = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
@@ -273,7 +294,7 @@ export function toWarpTheme(theme: DokiTheme): string {
   const block = (bright: boolean) => ansi.map(n => `    ${n}: '${s[key(n, bright)]}'`).join('\n')
   return [
     `# ${s.name}, written by doki-theme-picker. Each pick rewrites this file.`,
-    `name: Doki Theme Picker`,
+    `name: ${JSON.stringify(warpThemeName(theme))}`,
     `accent: '${theme.colors.accent.toUpperCase()}'`,
     `cursor: '${s.cursorColor}'`,
     `background: '${s.background}'`,

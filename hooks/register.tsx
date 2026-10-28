@@ -22,7 +22,9 @@ import {
   updateClaudeSettings,
   updateStatusLineTheme,
   updateWtSettings,
-  WARP_FILE,
+  nextWarpFile,
+  updateWarpSettings,
+  warpThemeName,
   windowStart,
 } from './theme'
 import { splitBoxes, splitReply } from './labels'
@@ -295,15 +297,17 @@ async function applyOutside($: EngineInterface, root: string, theme: DokiTheme):
     notes.push('Windows Terminal not found, skipped')
   }
 
-  // 3b. Warp: one fixed custom theme file. Written only when Warp's folder is there.
-  // Pick "Doki Theme Picker" in Warp's theme picker one time; each pick then rewrites it.
+  // 3b. Warp: written only when Warp's folder is there. Warp does not reload a changed theme file, so the pick
+  // goes to the other of two files and settings.toml names it; Warp reloads settings.toml and shows it at once.
   const appData = ((await $.env.get('APPDATA')) ?? '').replace(/\\/g, '/')
   try {
-    if (appData && (await $.fs.exists(`${appData}/warp/Warp`))) {
-      const warpPath = `${appData}/warp/Warp/data/themes/${WARP_FILE}`
-      const old = await readOr($, warpPath)
-      if (old !== undefined) await backup($, root, 'warpTheme', WARP_FILE, old)
-      await $.fs.write(warpPath, toWarpTheme(theme))
+    if (appData && local && (await $.fs.exists(`${appData}/warp/Warp`))) {
+      const tomlPath = `${local}/warp/Warp/config/settings.toml`
+      const toml = await readOr($, tomlPath)
+      const file = nextWarpFile(toml)
+      await $.fs.write(`${appData}/warp/Warp/data/themes/${file}`, toWarpTheme(theme))
+      if (toml !== undefined) await backup($, root, 'warpTheme', 'settings.toml', toml)
+      await $.fs.write(tomlPath, updateWarpSettings(toml, file, warpThemeName(theme)))
       notes.push('Warp theme')
     }
   } catch (error) {

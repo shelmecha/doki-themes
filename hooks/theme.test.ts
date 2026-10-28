@@ -26,6 +26,9 @@ import {
   toLiveTheme,
   toTermcnTheme,
   toWarpTheme,
+  nextWarpFile,
+  updateWarpSettings,
+  WARP_FILES,
   toWtScheme,
   statusLineSlug,
   updateClaudeSettings,
@@ -383,11 +386,24 @@ test('list groups Doki first, then termcn, each dark before light', async () => 
   expect(flags).toEqual([...flags].sort((a, b) => Number(b) - Number(a)))
 })
 
-test('the Warp theme has a fixed name and the 16 terminal colors of the Windows Terminal scheme', () => {
+test('Warp settings.toml points at the other theme file each pick and keeps the other lines', () => {
+  const toml = '[appearance]\n\n[appearance.themes]\nsystem_theme = true\ntheme = "Dark"\n\n[appearance.text]\nfont_size = 12.0\n'
+  expect(nextWarpFile(toml)).toBe(WARP_FILES[0])
+  const once = updateWarpSettings(toml, WARP_FILES[0], 'Doki: Ram')
+  expect(once).toBe(
+    '[appearance]\n\n[appearance.themes]\nsystem_theme = false\n' +
+      'theme = { custom = { name = "Doki: Ram", path = "doki-theme-picker-a.yaml" } }\n\n[appearance.text]\nfont_size = 12.0\n',
+  )
+  expect(nextWarpFile(once)).toBe(WARP_FILES[1])
+  expect(updateWarpSettings(updateWarpSettings(once, WARP_FILES[1], 'X'), WARP_FILES[0], 'Doki: Ram')).toBe(once)
+  expect(updateWarpSettings(undefined, WARP_FILES[0], 'Y')).toContain('[appearance.themes]\nsystem_theme = false\ntheme = ')
+})
+
+test('the Warp theme is named after the pick and has the 16 terminal colors of the Windows Terminal scheme', () => {
   for (const t of [findTheme('ram')!, findTheme('emilia light')!]) {
     const yaml = toWarpTheme(t)
     const wt = toWtScheme(t)
-    expect(yaml).toContain('name: Doki Theme Picker\n')
+    expect(yaml).toContain(`name: "Doki: ${t.name}"\n`)
     expect(yaml).toContain(`background: '${wt.background}'`)
     expect(yaml).toContain(`details: ${t.dark ? 'darker' : 'lighter'}`)
     expect(yaml).toContain(`    magenta: '${wt.purple}'`)
