@@ -7,6 +7,7 @@ import {
   RAM_ACCENT,
   ROLE_CONTRAST,
   SUBTLE_CONTRAST,
+  TERMCN_ALL_RAW,
   TEXT_CONTRAST,
   THEMES as ALL_THEMES,
   contrast,
@@ -37,6 +38,7 @@ import {
   windowStart,
 } from './theme'
 import { TERMCN_RAW } from './termcn-themes'
+import { TERMCN_EXTRA_RAW } from './termcn-extra-themes'
 import { THEMES } from './themes'
 
 // The hand-made files from before this mod (2026-10-04): the reference mapping.
@@ -335,7 +337,7 @@ test('a termcn theme maps onto the picker colors', async () => {
 test('termcn subtle text is readable on its background in every termcn theme', async () => {
   // termcn `muted` is a background tint: Dracula's #44475A on #282A36 is only 1.6:1.
   expect(contrast('#282A36', '#44475A')).toBeLessThan(SUBTLE_CONTRAST)
-  for (const raw of TERMCN_RAW) {
+  for (const raw of TERMCN_ALL_RAW) {
     const c = toTermcnTheme(raw).colors
     expect(contrast(c.bg, c.subtle)).toBeGreaterThanOrEqual(SUBTLE_CONTRAST)
     // still dimmer than the main text
@@ -355,6 +357,20 @@ test('termcn slug and preference round-trip, and findTheme finds termcn names', 
   expect(findTheme('nord')?.slug).toBe('termcn-nord')
   expect(findTheme('ram')?.slug).toBe('ram')
   expect(new Set(TERMCN_RAW.map(r => `termcn-${r.slug}`)).size).toBe(TERMCN_RAW.length)
+})
+
+test('extra light termcn themes join the generated list, sorted, with unique slugs', async () => {
+  expect(TERMCN_EXTRA_RAW.length).toBe(9)
+  expect(TERMCN_ALL_RAW.length).toBe(TERMCN_RAW.length + TERMCN_EXTRA_RAW.length)
+  expect(new Set(TERMCN_ALL_RAW.map(r => r.slug)).size).toBe(TERMCN_ALL_RAW.length)
+  const names = TERMCN_ALL_RAW.map(r => r.name)
+  expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
+  for (const raw of TERMCN_EXTRA_RAW) {
+    const t = ALL_THEMES.find(x => x.slug === `termcn-${raw.slug}`)
+    expect(t, raw.name).toBeDefined()
+    expect(t!.dark).toBe(false)
+  }
+  expect(ALL_THEMES.filter(t => t.slug.startsWith('termcn-') && !t.dark).length).toBe(10)
 })
 
 test('the live file holds the same colors, and its name finds the theme again', async () => {

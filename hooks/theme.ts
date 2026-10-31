@@ -1,5 +1,6 @@
 // Pure conversion: a Doki theme -> Claude Code theme JSON, Windows Terminal scheme, shared accent record.
 import type { Accent, DokiTheme, TermcnRaw } from '../types'
+import { TERMCN_EXTRA_RAW } from './termcn-extra-themes'
 import { TERMCN_RAW } from './termcn-themes'
 import { THEMES as DOKI_THEMES } from './themes'
 
@@ -141,7 +142,12 @@ export function toTermcnTheme(raw: TermcnRaw): DokiTheme {
   }
 }
 
-export const THEMES: readonly DokiTheme[] = [...DOKI_THEMES, ...TERMCN_RAW.map(toTermcnTheme)]
+/** The generated termcn themes plus the hand-written light ones, one per slug, sorted by name. */
+export const TERMCN_ALL_RAW: readonly TermcnRaw[] = [...new Map([...TERMCN_RAW, ...TERMCN_EXTRA_RAW].map(r => [r.slug, r] as const)).values()].sort(
+  (a, b) => a.name.localeCompare(b.name),
+)
+
+export const THEMES: readonly DokiTheme[] = [...DOKI_THEMES, ...TERMCN_ALL_RAW.map(toTermcnTheme)]
 
 /** The label a theme goes by in names and toasts: "Doki Ram", "termcn Dracula". */
 export const sourceLabel = (theme: DokiTheme): string => (theme.source === 'termcn' ? 'termcn' : 'Doki')
@@ -244,7 +250,9 @@ export function toWtScheme(theme: DokiTheme): WtScheme {
     blue: up(c.blue),
     purple: up(c.func),
     cyan: up(c.cyan),
-    white: up(theme.dark ? c.fg : c.widget),
+    // Light themes: shells print plain text in ANSI white (PSReadLine's default token is ESC[37m),
+    // so white and brightWhite must be readable on the light background, not a background tint.
+    white: up(c.fg),
     brightBlack: up(c.subtle),
     brightRed: up(c.error),
     brightGreen: up(c.constant),
@@ -252,7 +260,7 @@ export function toWtScheme(theme: DokiTheme): WtScheme {
     brightBlue: up(c.purple),
     brightPurple: up(c.bool),
     brightCyan: up(c.interface),
-    brightWhite: theme.dark ? '#FFFFFF' : up(c.bg),
+    brightWhite: theme.dark ? '#FFFFFF' : up(c.fg),
   }
 }
 

@@ -1,6 +1,6 @@
 # doki-themes
 
-A theme picker for Claude Code on Windows. Type `/doki-theme-picker` to open a pane with 88 Doki themes (dark and light) and 40 termcn themes. Use the arrow keys to see each theme in the preview at the top of the pane. Press Enter, or click a theme, to apply the theme to Claude Code and Windows Terminal.
+A theme picker for Claude Code on Windows. Type `/doki-theme-picker` to open a pane with 88 Doki themes (dark and light) and 49 termcn themes (10 of them light). Use the arrow keys to see each theme in the preview at the top of the pane. Press Enter, or click a theme, to apply the theme to Claude Code and Windows Terminal.
 
 The plugin also shows the capitalised label or heading words that open a reply paragraph (for example `FYI:` or `WAITS ON SHELVI`) in bold, in the theme's Claude color. A label written as a Markdown heading (`## ANSWER:`) gets the same look. It also shows the category word at the start of a top-level list item (for example `- Done (2026-10-17)`, `- Waits on Shelvi` or `2. Later: tidy`) in capitals, underlined, in the theme's suggestion color. A short group heading line with a list right under it (for example `Done` or `Next action (Shelvi's)`), and a Markdown heading that is not in capitals (for example `## Done`), get the same look, also when the line is in bold or italic (`**Done recently**`); `BARE_HEADING_WORDS` in `hooks/labels.ts` sets the most words (4). An intro of up to five words with a colon (for example `- Commit: f0a582e` or `- Left out:`) gets the same look; `INTRO_WORDS` in `hooks/labels.ts` sets the most words (5). A dash item with this look shows no dash, so it reads as a heading line (numbered items keep their number); set `HEADING_HIDE_DASH` in `hooks/register.tsx` to `false` to keep the dash. The categories are Done, Waits on Shelvi, Later, FYI, Undone, Open checks, Risks, Blockers and Decisions. To change the color, the underline or the capitals, edit `HEADING_COLOR`, `HEADING_UNDERLINE` and `HEADING_CAPS` in `hooks/register.tsx`.
 
@@ -94,7 +94,7 @@ The uninstall does not change your current theme. To go back to a built-in theme
 - Validate the manifests: `claude plugin validate --strict .`
 - `tsconfig.json` extends `.claude-plugin/types/tsconfig.json`. That folder holds the mod types for your editor, and git ignores it. The test and validate commands work without it.
 - `node scripts/build-themes.mjs <path to the Doki Theme VS Code extension>` writes `hooks/themes.ts`.
-- `node scripts/build-termcn.mjs` writes `hooks/termcn-themes.ts`.
+- `node scripts/build-termcn.mjs` writes `hooks/termcn-themes.ts`. The extra light themes live in `hooks/termcn-extra-themes.ts`, which you edit by hand.
 - Change `version` in `.claude-plugin/plugin.json` for each release. If the version does not change, installed copies do not update.
 
 ## Credits and license

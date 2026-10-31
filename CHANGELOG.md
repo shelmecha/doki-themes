@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.10 (2026-11-01)
+
+- 9 light themes join the termcn group: Cute Pink Light, Catppuccin Latte, GitHub Light, Solarized Light, Rosé Pine Dawn, Flexoki Light, Ayu Light, Everforest Light and Gruvbox Light. termcn itself ships only 1 light theme, so these come from each project's official light palette, in `hooks/termcn-extra-themes.ts`. `scripts/build-termcn.mjs` does not touch that file. Their text colors go through the light-theme contrast step. Tested (105 pass); not yet checked by eye in the picker.
+- Light themes: text you type in PowerShell is readable again. Windows Terminal and Warp set ANSI white and bright white to the theme text color instead of the background, since PSReadLine prints plain text in white. Pick a light theme again to update the scheme.
+
 ## 0.2.9 (2026-10-29)
 
 - Warp changes at once on each pick, with no trip to Settings. Warp does not reload a theme file that changes, so each pick writes `doki-theme-picker-a.yaml` or `-b.yaml` in turn, named "Doki: <theme>", and sets `[appearance.themes]` in `%LOCALAPPDATA%\warp\Warp\config\settings.toml` to that file. settings.toml is backed up to `backups\settings\warp\` first. Tested (104 pass); verified in Warp by Shelvi on 2026-10-29.
