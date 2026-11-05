@@ -798,3 +798,23 @@ test('the live shape draws the gap; numbered items keep their number and get no 
   expect((await ui.findAll({ type: 'Markdown' })).map(m => m.text.split('\n')[0])).toContain('2. Check: the form')
   await ui.unmount()
 })
+test('a DONE heading label draws in inverse video; FYI and NEXT keep their look', async ($, on) => {
+  const { ui } = await mount($, on, { text: ['## DONE:', '', 'Built it.', '', 'FYI: x', '', 'NEXT: y'].join(String.fromCharCode(10)), isFirstOfReply: true })
+  expect((await ui.find({ type: 'Text', text: 'DONE:' }))?.props).toMatchObject({ color: 'claude', weight: 'bold', inverse: true })
+  for (const word of ['FYI:', 'NEXT:']) {
+    const label = await ui.find({ type: 'Text', text: word })
+    expect(label?.props).toMatchObject({ color: 'claude', weight: 'bold' })
+    expect(label?.props.inverse).toBeUndefined()
+  }
+  await ui.unmount()
+})
+test('a bold DONE line label draws in inverse video', async ($, on) => {
+  const { ui } = await mount($, on, { text: '**DONE:** built it.', isFirstOfReply: true })
+  expect((await ui.find({ type: 'Text', text: 'DONE:' }))?.props).toMatchObject({ inverse: true })
+  await ui.unmount()
+})
+test('a plain DONE line label draws in inverse video', async ($, on) => {
+  const { ui } = await mount($, on, { text: 'DONE 2026-11-01 (x)', isFirstOfReply: true })
+  expect((await ui.find({ type: 'Text', text: 'DONE' }))?.props).toMatchObject({ inverse: true })
+  await ui.unmount()
+})

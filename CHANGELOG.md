@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased (2026-11-01)
+
+- The DONE reply label ("## DONE:", "DONE:", "**DONE:**") draws in inverse video: the theme's Claude color as the background, the label in the background color, so finished work stands out while scrolling. Only the label words; the rest of the line and every other label keep their look. Tested (108 pass); not yet checked by eye.
+- VS Code themes join the picker. Each time `/doki-theme-picker` opens, it scans `%USERPROFILE%\.vscode\extensions` (and `.vscode-insiders`) for color themes that are new or changed since the last scan, converts them and stores them in `%USERPROFILE%\.claude\doki-theme-picker\vscode-themes.json`. There is no background program. Each creator gets its own section, named after the extension's display name, or after the publisher when the display name says only "Theme". Themes of an uninstalled extension stay in the picker. The Doki Theme and termcn extensions are skipped, because the picker already has them. Text colors are made readable, and mid-tone backgrounds are moved clearly dark or light. A theme that cannot be read is skipped, with the reason in the debug log. The first scan of 10 installed themes took 164 ms; a scan with nothing changed took 14 ms. Tested (119 pass); the sections were seen in an isolated session (2026-11-05).
+
 ## 0.2.10 (2026-11-01)
 
 - 9 light themes join the termcn group: Cute Pink Light, Catppuccin Latte, GitHub Light, Solarized Light, Rosé Pine Dawn, Flexoki Light, Ayu Light, Everforest Light and Gruvbox Light. termcn itself ships only 1 light theme, so these come from each project's official light palette, in `hooks/termcn-extra-themes.ts`. `scripts/build-termcn.mjs` does not touch that file. Their text colors go through the light-theme contrast step. Tested (105 pass); not yet checked by eye in the picker.

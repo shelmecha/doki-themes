@@ -22,10 +22,11 @@ export type DokiColors = {
   bool: string
 }
 
-/** Where a theme comes from. Doki themes leave `source` off. termcn slugs carry a "termcn-" prefix. */
-export type ThemeSource = 'doki' | 'termcn'
+/** Where a theme comes from. Doki themes leave `source` off. termcn and VS Code slugs carry a "termcn-" or "vscode-" prefix. */
+export type ThemeSource = 'doki' | 'termcn' | 'vscode'
 
-export type DokiTheme = { name: string; slug: string; dark: boolean; colors: DokiColors; source?: ThemeSource }
+/** `group`: the picker section a VS Code theme goes under, its extension's display name or publisher. */
+export type DokiTheme = { name: string; slug: string; dark: boolean; colors: DokiColors; source?: ThemeSource; group?: string }
 
 /** The termcn color keys the picker maps from (hooks/termcn-themes.ts, generated). */
 export type TermcnColors = Record<

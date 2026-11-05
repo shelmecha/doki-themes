@@ -149,11 +149,11 @@ export const TERMCN_ALL_RAW: readonly TermcnRaw[] = [...new Map([...TERMCN_RAW, 
 
 export const THEMES: readonly DokiTheme[] = [...DOKI_THEMES, ...TERMCN_ALL_RAW.map(toTermcnTheme)]
 
-/** The label a theme goes by in names and toasts: "Doki Ram", "termcn Dracula". */
-export const sourceLabel = (theme: DokiTheme): string => (theme.source === 'termcn' ? 'termcn' : 'Doki')
+/** The label a theme goes by in names and toasts: "Doki Ram", "termcn Dracula", "VS Code Cute". */
+export const sourceLabel = (theme: DokiTheme): string => (theme.source === 'termcn' ? 'termcn' : theme.source === 'vscode' ? 'VS Code' : 'Doki')
 
-/** The Claude Code theme preference for a theme: custom:doki-ram, custom:termcn-dracula. */
-export const preferenceOf = (theme: DokiTheme): string => (theme.source === 'termcn' ? `custom:${theme.slug}` : `custom:doki-${theme.slug}`)
+/** The Claude Code theme preference for a theme: custom:doki-ram, custom:termcn-dracula, custom:vscode-webfreak-cute-theme-cute. */
+export const preferenceOf = (theme: DokiTheme): string => (theme.source === 'termcn' || theme.source === 'vscode' ? `custom:${theme.slug}` : `custom:doki-${theme.slug}`)
 
 /**
  * The one theme file the picker rewrites at each pick (~/.claude/themes/doki-theme-picker.json) and the preference
@@ -362,9 +362,13 @@ export function findTheme(query: string, themes: readonly DokiTheme[] = THEMES):
   if (!key) return undefined
   // Doki names win; a bare termcn name ("nord") is tried as "termcn-nord" after them.
   const termcn = `termcn-${key}`
+  // A VS Code theme goes by its name ("lunar pink", "vscode cute"): its slug holds the extension's id too.
+  const vscode = key.replace(/^vscode-/, '')
+  const nameKey = (t: DokiTheme) => t.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
   return (
     themes.find(t => t.slug === key) ??
     themes.find(t => t.slug === termcn) ??
+    themes.find(t => t.source === 'vscode' && nameKey(t) === vscode) ??
     themes.find(t => t.slug.startsWith(key)) ??
     themes.find(t => t.slug.startsWith(termcn))
   )
@@ -377,12 +381,12 @@ export function findTheme(query: string, themes: readonly DokiTheme[] = THEMES):
 export function slugOfPreference(preference: unknown): string {
   if (typeof preference !== 'string' || preference === LIVE_PREFERENCE) return ''
   if (preference.startsWith('custom:doki-')) return preference.slice('custom:doki-'.length)
-  return preference.startsWith('custom:termcn-') ? preference.slice('custom:'.length) : ''
+  return preference.startsWith('custom:termcn-') || preference.startsWith('custom:vscode-') ? preference.slice('custom:'.length) : ''
 }
 
-/** Doki, then termcn; within each, dark first, then light, each by name: the order the picker lists them in. */
+/** Doki, then termcn, then VS Code; within each, dark first, then light, each by name: the order the picker lists them in. */
 export function ordered(themes: readonly DokiTheme[] = THEMES): DokiTheme[] {
-  const rank = (t: DokiTheme) => (t.source === 'termcn' ? 1 : 0)
+  const rank = (t: DokiTheme) => (t.source === 'vscode' ? 2 : t.source === 'termcn' ? 1 : 0)
   return [...themes].sort((a, b) => rank(a) - rank(b) || Number(b.dark) - Number(a.dark) || a.name.localeCompare(b.name))
 }
 

@@ -1,6 +1,6 @@
 # doki-themes
 
-A theme picker for Claude Code on Windows. Type `/doki-theme-picker` to open a pane with 88 Doki themes (dark and light) and 49 termcn themes (10 of them light). Use the arrow keys to see each theme in the preview at the top of the pane. Press Enter, or click a theme, to apply the theme to Claude Code and Windows Terminal.
+A theme picker for Claude Code on Windows. Type `/doki-theme-picker` to open a pane with 88 Doki themes (dark and light) and 49 termcn themes (10 of them light), plus the color themes of the VS Code extensions you install. Use the arrow keys to see each theme in the preview at the top of the pane. Press Enter, or click a theme, to apply the theme to Claude Code and Windows Terminal.
 
 The plugin also shows the capitalised label or heading words that open a reply paragraph (for example `FYI:` or `WAITS ON SHELVI`) in bold, in the theme's Claude color. A label written as a Markdown heading (`## ANSWER:`) gets the same look. It also shows the category word at the start of a top-level list item (for example `- Done (2026-10-17)`, `- Waits on Shelvi` or `2. Later: tidy`) in capitals, underlined, in the theme's suggestion color. A short group heading line with a list right under it (for example `Done` or `Next action (Shelvi's)`), and a Markdown heading that is not in capitals (for example `## Done`), get the same look, also when the line is in bold or italic (`**Done recently**`); `BARE_HEADING_WORDS` in `hooks/labels.ts` sets the most words (4). An intro of up to five words with a colon (for example `- Commit: f0a582e` or `- Left out:`) gets the same look; `INTRO_WORDS` in `hooks/labels.ts` sets the most words (5). A dash item with this look shows no dash, so it reads as a heading line (numbered items keep their number); set `HEADING_HIDE_DASH` in `hooks/register.tsx` to `false` to keep the dash. The categories are Done, Waits on Shelvi, Later, FYI, Undone, Open checks, Risks, Blockers and Decisions. To change the color, the underline or the capitals, edit `HEADING_COLOR`, `HEADING_UNDERLINE` and `HEADING_CAPS` in `hooks/register.tsx`.
 
@@ -38,6 +38,16 @@ To apply a theme without the picker, type its name after the command:
 /doki-theme-picker rem
 /doki-theme-picker termcn dracula
 ```
+
+### VS Code themes
+
+Each time the picker opens, it looks in `%USERPROFILE%\.vscode\extensions` (and `.vscode-insiders\extensions`) for color themes that you installed or updated since the last time. It adds them at the end of the list, with one section for each creator, for example `VS CODE · LUNAR PINK THEME · DARK`. No program runs in the background.
+
+- The picker stores the converted themes in `%USERPROFILE%\.claude\doki-theme-picker\vscode-themes.json`. If you uninstall an extension, its themes stay in the picker. To remove them, delete that file.
+- The picker skips the Doki Theme and termcn extensions, because it already has those themes.
+- The picker changes text colors that are hard to read, and makes a background that is neither dark nor light clearly one or the other. So a theme can look a little different from VS Code.
+- If the picker cannot read a theme, it skips that theme and writes the reason to the debug log. If VS Code is not installed, the list has no VS Code sections.
+- The picker only reads the extension folders. It does not change VS Code or its settings.
 
 Claude Code shows the new theme at once. At the first pick after you install or update the picker, and after you pick a theme with `/theme`, the picker says "Restart Claude Code one time to see it here." Windows Terminal changes at once. Restart Claude Code one time; after that, each pick shows at once.
 
@@ -78,9 +88,10 @@ Restart Claude Code after the update.
 
 The uninstall does not change your current theme. To go back to a built-in theme, use `/config`. To remove all the files that the picker wrote:
 
-1. Delete the `doki-*.json` and `termcn-*.json` files in `%USERPROFILE%\.claude\themes\`. This includes `doki-theme-picker.json`.
+1. Delete the `doki-*.json`, `termcn-*.json` and `vscode-*.json` files in `%USERPROFILE%\.claude\themes\`. This includes `doki-theme-picker.json`.
 2. In Windows Terminal, open Settings > Color schemes and delete the `Doki ...` and `termcn ...` schemes.
 3. Delete `%USERPROFILE%\.claude\mods\theme-accent.json`, if it exists.
+4. Delete the `%USERPROFILE%\.claude\doki-theme-picker` folder.
 
 ## Problems
 

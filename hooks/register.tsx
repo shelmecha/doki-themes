@@ -12,6 +12,7 @@ import {
   slugOfPreference,
   sourceLabel,
   stamp,
+  THEMES,
   statusLineSlug,
   swatchCells,
   toAccent,
@@ -29,6 +30,8 @@ import {
 } from './theme'
 import { splitBoxes, splitReply } from './labels'
 import type { Piece } from './labels'
+import { EXTENSION_ROOTS, STORE_PATH, keepOthers, parseStore, serializeStore, syncVscodeThemes, themesOf } from './vscode-themes'
+import type { SyncFs } from './vscode-themes'
 
 const PANE = 'doki-theme-picker'
 const COMMAND = 'doki-theme-picker'
@@ -58,6 +61,8 @@ const LABEL_INDENT = 2
 // The color is a theme key, so each theme draws it in its own color: 'suggestion' is the theme's
 // interface color (cream #F6E9CB in Natsuki Dark), apart from the labels' 'claude' accent.
 const HEADING_COLOR = 'suggestion'
+// Labels drawn in inverse video (the Claude color as the background) so finished work stands out.
+const INVERSE_LABELS = new Set(['DONE'])
 const HEADING_UNDERLINE = true
 const HEADING_CAPS = true
 // A dash item with the H2 look reads as a heading line: its "-" mark is painted over with
@@ -78,26 +83,46 @@ const BOX_TITLE_LEFT = 2
 // The reply bullet a callout block draws when it opens the reply.
 const BULLET = '●'
 
-const LIST = ordered()
+// The built-in themes plus those synced from VS Code; the list is built again when the synced ones change.
+let allThemes: readonly DokiTheme[] = THEMES
+let LIST: DokiTheme[] = []
 // The rows the list draws, group headers included: what the window slides over.
 type Row = { kind: 'header'; label: string } | { kind: 'theme'; theme: DokiTheme }
-const ROWS: Row[] = []
+let ROWS: Row[] = []
 // The header row each row sits under, so the sticky header can name the source.
-const HEADER_OF: number[] = []
-for (const source of ['doki', 'termcn'] as const) {
-  for (const dark of [true, false]) {
-    const group = LIST.filter(t => (t.source ?? 'doki') === source && t.dark === dark)
-    if (group.length === 0) continue
-    const header = ROWS.length
-    ROWS.push({ kind: 'header', label: `${source.toUpperCase()} · ${dark ? 'DARK' : 'LIGHT'} (${group.length})` })
-    HEADER_OF.push(header)
-    for (const theme of group) {
-      ROWS.push({ kind: 'theme', theme })
-      HEADER_OF.push(header)
+let HEADER_OF: number[] = []
+const GROUPS = [
+  ['doki', 'DOKI'],
+  ['termcn', 'TERMCN'],
+  ['vscode', 'VS CODE'],
+] as const
+function setSynced(synced: readonly DokiTheme[]): void {
+  allThemes = [...THEMES, ...synced]
+  LIST = ordered(allThemes)
+  ROWS = []
+  HEADER_OF = []
+  for (const [source, title] of GROUPS) {
+    // VS Code themes get one section per creator (extension display name or publisher).
+    const sections = source === 'vscode' ? [...new Set(LIST.filter(t => t.source === 'vscode').map(t => t.group ?? ''))] : [undefined]
+    for (const section of sections) {
+      const label = section ? `${title} · ${section.toUpperCase()}` : title
+      for (const dark of [true, false]) {
+        const group = LIST.filter(t => (t.source ?? 'doki') === source && t.dark === dark && (section === undefined || (t.group ?? '') === section))
+        if (group.length === 0) continue
+        const header = ROWS.length
+        ROWS.push({ kind: 'header', label: `${label} · ${dark ? 'DARK' : 'LIGHT'} (${group.length})` })
+        HEADER_OF.push(header)
+        for (const theme of group) {
+          ROWS.push({ kind: 'theme', theme })
+          HEADER_OF.push(header)
+        }
+      }
     }
   }
 }
+setSynced([])
 const FALLBACK = findTheme('ram') ?? LIST[0]!
+const find = (query: string) => findTheme(query, allThemes)
 
 // The body height the last render saw: the hooks need it to know which rows a window holds.
 let bodyRows = 30
@@ -191,7 +216,7 @@ async function currentPreference($: EngineInterface): Promise<unknown> {
 async function currentSlug($: EngineInterface): Promise<string> {
   const preference = await currentPreference($)
   if (preference !== LIVE_PREFERENCE) return slugOfPreference(preference)
-  return slugOfLiveTheme(await readOr($, `${await home($)}/.claude/themes/${LIVE_SLUG}.json`))
+  return slugOfLiveTheme(await readOr($, `${await home($)}/.claude/themes/${LIVE_SLUG}.json`), allThemes)
 }
 
 /**
@@ -358,7 +383,7 @@ async function redrawStatusLine($: EngineInterface, root: string, theme: DokiThe
  * accent file already holds the theme.
  */
 async function follow($: EngineInterface, preference: unknown): Promise<string[]> {
-  const theme = findTheme(slugOfPreference(preference))
+  const theme = find(slugOfPreference(preference))
   if (!theme) return []
   const root = await home($)
   if (await $.fs.exists(`${root}/.claude/mods`)) {
@@ -374,10 +399,50 @@ async function follow($: EngineInterface, preference: unknown): Promise<string[]
   return notes
 }
 
+/** Shows the themes stored by earlier scans. No scan: this runs at each session start. */
+async function loadSynced($: EngineInterface): Promise<void> {
+  try {
+    setSynced(themesOf(parseStore(await readOr($, `${await home($)}/${STORE_PATH}`)).store))
+  } catch {
+    // The built-in themes are still there.
+  }
+}
+
+/** Scans VS Code's extensions and stores what is new or changed. Never stops the picker from opening. */
+async function syncFromVscode($: EngineInterface): Promise<void> {
+  const started = Date.now()
+  try {
+    const root = await home($)
+    if (!root) return
+    const path = `${root}/${STORE_PATH}`
+    const text = await readOr($, path)
+    const { store, corrupt } = parseStore(text)
+    const fs: SyncFs = { exists: p => $.fs.exists(p), list: p => $.fs.list(p), read: p => $.fs.read(p), stat: p => $.fs.stat(p) }
+    const result = await syncVscodeThemes(fs, EXTENSION_ROOTS.map(folder => `${root}/${folder}`), store)
+    let next = result.store
+    if (result.changed) {
+      if (corrupt) await $.fs.write(`${path}.bad`, text!)
+      // Another session may have stored a theme during the scan.
+      const fresh = await readOr($, path)
+      if (fresh !== text) next = keepOthers(next, parseStore(fresh).store)
+      await $.fs.write(path, serializeStore(next))
+    }
+    setSynced(themesOf(next))
+    for (const skip of result.store.skipped) $.ui.log(`VS Code theme skipped: ${skip.extension} ${skip.theme}: ${skip.reason}`, { to: 'debug' })
+    $.ui.log(`VS Code scan: ${Date.now() - started} ms, ${next.themes.length} themes, ${result.added.length} added, ${result.updated.length} updated, ${result.store.skipped.length} skipped`, { to: 'debug' })
+  } catch (error) {
+    try {
+      $.ui.log(`VS Code scan failed: ${String(error).slice(0, 200)}`, { to: 'debug' })
+    } catch {
+      // The picker opens with what it has.
+    }
+  }
+}
+
 const openPicker = async ($: EngineInterface) => {
   const now = (await read($, current)) || (await currentSlug($))
   await update($, current, () => now)
-  const start = findTheme(now)?.slug ?? FALLBACK.slug
+  const start = find(now)?.slug ?? FALLBACK.slug
   await update($, highlight, () => start)
   ringSlot = slotOfTheme(start)
   return $.ui.open({ id: PANE, title: 'Themes', focus: true, closeOnEscape: true, columns: 48 })
@@ -386,6 +451,7 @@ const openPicker = async ($: EngineInterface) => {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await update($, current, () => '')
+    await loadSynced($)
     // Claude Code has read the theme preference before this hook runs (seen in 2.1.302): it draws this one.
     const preference = await currentPreference($)
     const key = typeof preference === 'string' ? preference : ''
@@ -395,16 +461,17 @@ export const register: Register = on => {
     await update($, followed, was => was || atStart)
     await $.command.register({
       name: COMMAND,
-      description: 'Pick a Doki or termcn theme for Claude Code and Windows Terminal (arrows + Enter)',
+      description: 'Pick a Doki, termcn or VS Code theme for Claude Code and Windows Terminal (arrows + Enter)',
       argumentHint: '[theme name]',
     })
     return next(e)
   })
 
   on('command.run', { command: COMMAND }, async ($, e) => {
+    await syncFromVscode($)
     const query = e.args.trim()
     if (query) {
-      const theme = findTheme(query)
+      const theme = find(query)
       if (!theme) return { text: `No theme matches "${query}". Run /${COMMAND} to browse.`, exitCode: 1 }
       const notes = await apply($, theme)
       return { text: `Theme: ${sourceLabel(theme)} ${theme.name} (${notes.join('; ')})` }
@@ -485,7 +552,7 @@ export const register: Register = on => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const slug = await read($, highlight)
     const chosen = await read($, current)
-    const theme = findTheme(slug) ?? FALLBACK
+    const theme = find(slug) ?? FALLBACK
     const c = theme.colors
 
     let swatch = null
@@ -557,7 +624,7 @@ export const register: Register = on => {
                   // because during a burst the row under the ring can be stale. A click raises only ui.press, for the
                   // slot clicked, with no ui.focus (observed 2026-10-06): a press off the ring is a click on this row.
                   const clicked = slotOfKey(press.element) !== ringSlot
-                  const named = clicked ? row.theme : (findTheme(await read($, highlight)) ?? row.theme)
+                  const named = clicked ? row.theme : (find(await read($, highlight)) ?? row.theme)
                   await apply($, named)
                   await $.ui.close({ id: PANE })
                 }}
@@ -582,7 +649,7 @@ export const register: Register = on => {
       // The overlays of a piece: its label or heading words, and a blank over its dash.
       const marks = (piece: Piece, top: number, left: number): RenderNode[] => {
         const mark = piece.label
-          ? Box({ position: 'absolute', top, left, children: [Text({ color: 'claude', weight: 'bold', children: [piece.label] })] })
+          ? Box({ position: 'absolute', top, left, children: [Text({ color: 'claude', weight: 'bold', ...(INVERSE_LABELS.has(piece.label.replace(/:$/, '')) ? { inverse: true } : {}), children: [piece.label] })] })
           : piece.heading
             ? Box({ position: 'absolute', top, left: left + (piece.bare ? 0 : HEADING_INDENT) + (piece.headingAt ?? 0), children: [Text({ color: HEADING_COLOR, underline: HEADING_UNDERLINE, children: [HEADING_CAPS ? piece.heading.toUpperCase() : piece.heading] })] })
             : undefined
